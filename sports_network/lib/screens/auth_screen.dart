@@ -57,7 +57,7 @@ class AuthScreen extends StatelessWidget {
                         ],
                       ),
                       child: const Text(
-                        'MyShop',
+                        'Sporty',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 50,

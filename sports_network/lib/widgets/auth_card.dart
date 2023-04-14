@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:async/async.dart';
+import 'package:masked_text/masked_text.dart';
 
 import '../data/reg_express.dart';
 import '../data/widget_keys.dart';
 import '../screens/verify_screen.dart';
 import '../screens/tabs_screen.dart';
+import '../picker/user_image_picker.dart';
 
 import '../data/extensions.dart';
 import '../models/interests.dart';
@@ -40,6 +45,7 @@ class _AuthCardState extends State<AuthCard> {
   final _futureGroup = FutureGroup();
   //establishing connection to firebaseAuth api
   final _auth = FirebaseAuth.instance;
+  late File _userImageFile;
 
   //disposing controllers to prevent memory leaks
   @override
@@ -129,29 +135,30 @@ class _AuthCardState extends State<AuthCard> {
   }
 
   Future<void> _getAuthSignUp(String email, String password, String mobile,
-      String interest, String username, NavigatorState navigator) async {
-    return _auth
-        .createUserWithEmailAndPassword(email: email, password: password)
-        .then((userCred) async {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCred.user!.uid)
-          .set({
-        'mobile': mobile,
-        'email': email,
-        'interest': interest,
-        'username': username
-      });
-      navigator.pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => VerifyScreen(),
-        ),
-      );
+      String interest, String username) async {
+    final _userCreds = await _auth.createUserWithEmailAndPassword(
+        email: email, password: password);
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('user_image')
+        .child('${_userCreds.user!.uid}.jpg');
+    await ref.putFile(_userImageFile).whenComplete(() => null);
+
+    final imageUrl = await ref.getDownloadURL();
+    await FirebaseFirestore.instance
+        .collection('Users')
+        .doc(_userCreds.user!.uid)
+        .set({
+      'mobile': mobile,
+      'email': email,
+      'interest': interest,
+      'username': username,
+      'image_url': imageUrl ?? ''
     });
   }
 
-  Future<void> _getAuthVerifyPhone(String mobile) {
-    return _auth.verifyPhoneNumber(
+  Future<void> _getAuthVerifyPhone(String mobile) async {
+    await _auth.verifyPhoneNumber(
         phoneNumber: mobile,
         verificationCompleted: (credential) async {
           //linking phone auth provider to current user account
@@ -161,7 +168,7 @@ class _AuthCardState extends State<AuthCard> {
         verificationFailed: (e) => _mobileVerificationFailed(e),
         codeSent: (String verificationId, int? forceResendingToken) async {
           //show dialog to take sms code from the user
-          _showSmsCodeDialog(verificationId);
+          await _showSmsCodeDialog(verificationId);
         },
         codeAutoRetrievalTimeout: (_) {});
   }
@@ -171,6 +178,16 @@ class _AuthCardState extends State<AuthCard> {
     FocusScope.of(context).unfocus();
     //checking validity of text fields
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    //checking if image was picked
+    if (_userImageFile == null && _authMode == AuthMode.Signup) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('please pick an image'),
+          backgroundColor: Theme.of(context).errorColor,
+        ),
+      );
       return;
     }
     // saving values in text fields
@@ -185,25 +202,33 @@ class _AuthCardState extends State<AuthCard> {
         _auth
             .signInWithEmailAndPassword(
                 email: _authData['email']!, password: _authData['password']!)
-            .then((_) async {
-          navigator.pushReplacementNamed(TabsScreen.routeName);
+            .then((_) {
+          Navigator.of(context).pushReplacementNamed(TabsScreen.routeName);
         });
       } else if (_authMode == AuthMode.Signup) {
         // Sign user up with email/password
         final future1 = _getAuthSignUp(
-            _authData['email']!,
-            _authData['password']!,
-            _authData['mobile']!,
-            _authData['interest']!,
-            _authData['username']!,
-            navigator);
+                _authData['email']!,
+                _authData['password']!,
+                _authData['mobile']!,
+                _authData['interest']!,
+                _authData['username']!)
+            .then(
+          (_) => navigator.pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => VerifyScreen(),
+            ),
+          ),
+        );
 
         //verify phone number
         final future3 = _getAuthVerifyPhone(_authData['mobile']!);
 
         //combining futures together
-        _futureGroup.add(future1);
-        _futureGroup.add(future3);
+        _futureGroup
+            .add(Future.delayed(Duration(seconds: 2)).then((_) => future1));
+        _futureGroup
+            .add(Future.delayed(Duration(seconds: 8)).then((_) => future3));
         _futureGroup.close();
         await _futureGroup.future;
       } else {
@@ -212,15 +237,16 @@ class _AuthCardState extends State<AuthCard> {
             phoneNumber: _authData['mobile']!,
             verificationCompleted: (credential) {
               //signing in using phone auth credentials
-              _auth.signInWithCredential(credential).then((_) async {
-                navigator.pushReplacementNamed(TabsScreen.routeName);
+              _auth.signInWithCredential(credential).then((_) {
+                Navigator.of(context)
+                    .pushReplacementNamed(TabsScreen.routeName);
               });
             },
             timeout: const Duration(seconds: 60),
             verificationFailed: (e) => _mobileVerificationFailed(e),
             codeSent: (String verificationId, int? forceResendingToken) async {
               //show dialog to take sms code from the user
-              _showSmsCodeDialog(verificationId);
+              await _showSmsCodeDialog(verificationId);
             },
             codeAutoRetrievalTimeout: (_) {});
       }
@@ -299,6 +325,10 @@ class _AuthCardState extends State<AuthCard> {
     }
   }
 
+  void _pickedImage(File image) {
+    _userImageFile = image;
+  }
+
   @override
   Widget build(BuildContext context) {
     //connecting to naviagtor state to be aware of route changes
@@ -314,13 +344,13 @@ class _AuthCardState extends State<AuthCard> {
       elevation: 8.0,
       child: Container(
         height: _authMode == AuthMode.Signup
-            ? 360
+            ? 400
             : _authMode == AuthMode.Login
                 ? 300
                 : 200,
         constraints: BoxConstraints(
             minHeight: _authMode == AuthMode.Signup
-                ? 360
+                ? 400
                 : _authMode == AuthMode.Login
                     ? 300
                     : 200),
@@ -336,6 +366,7 @@ class _AuthCardState extends State<AuthCard> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
+                if (_authMode == AuthMode.Signup) UserImagePicker(_pickedImage),
                 if (_authMode == AuthMode.LoginWithMobile ||
                     _authMode == AuthMode.Login)
                   Row(
@@ -353,23 +384,20 @@ class _AuthCardState extends State<AuthCard> {
                       const SizedBox(
                         height: 20,
                       ),
-                      //restricting view of menu if only one auth provider
-                      if (_auth.currentUser != null &&
-                          _auth.currentUser!.providerData.length >= 2)
-                        PopupMenuButton(
-                          onSelected: (mode) => _switchLoginMode(mode),
-                          icon: const Icon(Icons.more_vert),
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
-                              child: Text('Login With Mobile'),
-                              value: AuthMode.LoginWithMobile,
-                            ),
-                            PopupMenuItem(
-                              child: Text('Login With E/P'),
-                              value: AuthMode.Login,
-                            )
-                          ],
-                        ),
+                      PopupMenuButton(
+                        onSelected: (mode) => _switchLoginMode(mode),
+                        icon: const Icon(Icons.more_vert),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            child: Text('Login With Mobile'),
+                            value: AuthMode.LoginWithMobile,
+                          ),
+                          PopupMenuItem(
+                            child: Text('Login With E/P'),
+                            value: AuthMode.Login,
+                          )
+                        ],
+                      ),
                     ],
                   ),
                 if (_authMode != AuthMode.LoginWithMobile)
@@ -448,15 +476,15 @@ class _AuthCardState extends State<AuthCard> {
                   ),
                 if (_authMode == AuthMode.Signup ||
                     _authMode == AuthMode.LoginWithMobile)
-                  TextFormField(
+                  MaskedTextField(
                     key: WidgetKey.mobileTextField,
+                    mask: '+### ### ### ####',
                     decoration: InputDecoration(
                       labelText: 'Mobile Number',
                     ),
                     keyboardType: TextInputType.phone,
                     validator: (value) {
-                      if (value!.isEmpty ||
-                          !RegExpressions.phoneNoPattern.hasMatch(value)) {
+                      if (value!.isEmpty) {
                         return 'Invalid number!';
                       }
                       return null;

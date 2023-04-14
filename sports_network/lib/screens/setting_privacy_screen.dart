@@ -38,7 +38,7 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
             onPressed: () async {
               final newValue = controller.text.trim();
               await FirebaseFirestore.instance
-                  .collection('products')
+                  .collection('Products')
                   .doc(auth.currentUser!.uid)
                   .set({field: newValue});
             },

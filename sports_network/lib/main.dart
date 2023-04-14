@@ -54,12 +54,12 @@ class MyApp extends StatelessWidget {
           ),
       ),
       routes: {
-        '/': (_) => AuthScreen()
+        '/': (_) => AuthScreen(),
         TabsScreen.routeName: (_) => TabsScreen(),
         BuddiesScreen.routeName: (_) => BuddiesScreen(),
         DiscoverScreen.routeName: (_) => DiscoverScreen(),
         ProfileScreen.routeName: (_) => ProfileScreen(),
-        SettingPrivacyScreen.routeName: (_) => SettingPrivacyScreen(),
+        SettingPrivacyScreen.routeName: (_) => SettingPrivacyScreen()
     },
     );
   }
