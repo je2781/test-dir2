@@ -24,7 +24,7 @@ class AuthCard extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _AuthCardState createState() => _AuthCardState();
+  State<AuthCard> createState() => _AuthCardState();
 }
 
 class _AuthCardState extends State<AuthCard> {
@@ -42,10 +42,9 @@ class _AuthCardState extends State<AuthCard> {
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
   final _interestsController = TextEditingController();
-  final _futureGroup = FutureGroup();
   //establishing connection to firebaseAuth api
   final _auth = FirebaseAuth.instance;
-  late File _userImageFile;
+  File? _userImageFile;
 
   //disposing controllers to prevent memory leaks
   @override
@@ -96,16 +95,15 @@ class _AuthCardState extends State<AuthCard> {
               // Create a PhoneAuthCredential with the code
               final credential = PhoneAuthProvider.credential(
                   verificationId: verificationId, smsCode: smsCode);
-              if (_authMode == AuthMode.Signup) {
-                //linking mobile to current user account
-                await _auth.currentUser!.linkWithCredential(credential);
-              } else {
-                //signing in using phone auth credentials
-                _auth.signInWithCredential(credential).then((_) {
-                  Navigator.of(context)
-                      .pushReplacementNamed(TabsScreen.routeName);
-                });
-              }
+
+              //signing in using phone auth credentials
+              _auth.signInWithCredential(credential).then(
+                    (_) => Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => TabsScreen(),
+                      ),
+                    ),
+                  );
             },
           ),
         ],
@@ -136,41 +134,28 @@ class _AuthCardState extends State<AuthCard> {
 
   Future<void> _getAuthSignUp(String email, String password, String mobile,
       String interest, String username) async {
-    final _userCreds = await _auth.createUserWithEmailAndPassword(
+    final userCreds = await _auth.createUserWithEmailAndPassword(
         email: email, password: password);
+    //connecting to firebasestorage api, and creating a path and file name for the profile pic
     final ref = FirebaseStorage.instance
         .ref()
         .child('user_image')
-        .child('${_userCreds.user!.uid}.jpg');
-    await ref.putFile(_userImageFile).whenComplete(() => null);
-
+        .child('${userCreds.user!.uid}.jpg');
+    //wait for profile pic to be stored in path
+    await ref.putFile(_userImageFile!).whenComplete(() => null);
+    //download profile path url to store in firebasestore
     final imageUrl = await ref.getDownloadURL();
+    //connecting to firebasestore api, and storing user signup details
     await FirebaseFirestore.instance
         .collection('Users')
-        .doc(_userCreds.user!.uid)
+        .doc(userCreds.user!.uid)
         .set({
       'mobile': mobile,
       'email': email,
       'interest': interest,
       'username': username,
-      'image_url': imageUrl ?? ''
+      'image_url': imageUrl
     });
-  }
-
-  Future<void> _getAuthVerifyPhone(String mobile) async {
-    await _auth.verifyPhoneNumber(
-        phoneNumber: mobile,
-        verificationCompleted: (credential) async {
-          //linking phone auth provider to current user account
-          await _auth.currentUser!.linkWithCredential(credential);
-        },
-        timeout: const Duration(seconds: 60),
-        verificationFailed: (e) => _mobileVerificationFailed(e),
-        codeSent: (String verificationId, int? forceResendingToken) async {
-          //show dialog to take sms code from the user
-          await _showSmsCodeDialog(verificationId);
-        },
-        codeAutoRetrievalTimeout: (_) {});
   }
 
   Future<void> _submit(NavigatorState navigator) async {
@@ -192,55 +177,50 @@ class _AuthCardState extends State<AuthCard> {
     }
     // saving values in text fields
     _formKey.currentState!.save();
-    //set loading indicator
-    setState(() {
-      _isLoading = true;
-    });
+
     try {
+      //set loading indicator
+      setState(() {
+        _isLoading = true;
+      });
       if (_authMode == AuthMode.Login) {
         // Log in user with email/password
         _auth
             .signInWithEmailAndPassword(
                 email: _authData['email']!, password: _authData['password']!)
-            .then((_) {
-          Navigator.of(context).pushReplacementNamed(TabsScreen.routeName);
-        });
+            .then(
+              (userCred) => Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => TabsScreen(user: userCred.user),
+                ),
+              ),
+            );
       } else if (_authMode == AuthMode.Signup) {
-        // Sign user up with email/password
-        final future1 = _getAuthSignUp(
+        // Sign user up with email/password, and store extra values in the store using the firebasefirestore api
+        _getAuthSignUp(
                 _authData['email']!,
                 _authData['password']!,
                 _authData['mobile']!,
                 _authData['interest']!,
                 _authData['username']!)
-            .then(
-          (_) => navigator.pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => VerifyScreen(),
-            ),
-          ),
-        );
-
-        //verify phone number
-        final future3 = _getAuthVerifyPhone(_authData['mobile']!);
-
-        //combining futures together
-        _futureGroup
-            .add(Future.delayed(Duration(seconds: 2)).then((_) => future1));
-        _futureGroup
-            .add(Future.delayed(Duration(seconds: 8)).then((_) => future3));
-        _futureGroup.close();
-        await _futureGroup.future;
+            .then((_) => navigator.pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => VerifyScreen(),
+                  ),
+                ));
       } else {
         //signin using mobile number
         await _auth.verifyPhoneNumber(
             phoneNumber: _authData['mobile']!,
-            verificationCompleted: (credential) {
+            verificationCompleted: (credential) async {
               //signing in using phone auth credentials
-              _auth.signInWithCredential(credential).then((_) {
-                Navigator.of(context)
-                    .pushReplacementNamed(TabsScreen.routeName);
-              });
+              _auth.signInWithCredential(credential).then(
+                    (userCred) => Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => TabsScreen(user: userCred.user),
+                      ),
+                    ),
+                  );
             },
             timeout: const Duration(seconds: 60),
             verificationFailed: (e) => _mobileVerificationFailed(e),
@@ -256,10 +236,12 @@ class _AuthCardState extends State<AuthCard> {
       if (err.message != null) {
         message = err.message!;
       }
+
       //removing loading indicator
       setState(() {
         _isLoading = false;
       });
+
       //scaffold page UI info dialog, informing on error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -269,10 +251,12 @@ class _AuthCardState extends State<AuthCard> {
       );
     } catch (_) {
       var message = 'Could not process your credentials. Try again later.';
+
       //removing loading indicator
       setState(() {
         _isLoading = false;
       });
+
       //scaffold page UI info dialog, informing on error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -284,11 +268,7 @@ class _AuthCardState extends State<AuthCard> {
   }
 
   void _switchAuthMode() {
-    if (_authMode == AuthMode.Login) {
-      setState(() {
-        _authMode = AuthMode.Signup;
-      });
-    } else if (_authMode == AuthMode.LoginWithMobile) {
+    if (_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile) {
       setState(() {
         _authMode = AuthMode.Signup;
       });
@@ -303,12 +283,7 @@ class _AuthCardState extends State<AuthCard> {
     if (_authMode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.ForgotPassword;
-        _emailController.text = '';
-      });
-    } else if (_authMode == AuthMode.LoginWithMobile) {
-      setState(() {
-        _authMode = AuthMode.ForgotPassword;
-        _emailController.text = '';
+        _emailController.clear();
       });
     }
   }
@@ -344,13 +319,13 @@ class _AuthCardState extends State<AuthCard> {
       elevation: 8.0,
       child: Container(
         height: _authMode == AuthMode.Signup
-            ? 400
+            ? 600
             : _authMode == AuthMode.Login
                 ? 300
                 : 200,
         constraints: BoxConstraints(
             minHeight: _authMode == AuthMode.Signup
-                ? 400
+                ? 600
                 : _authMode == AuthMode.Login
                     ? 300
                     : 200),
@@ -408,6 +383,9 @@ class _AuthCardState extends State<AuthCard> {
                       hintText: 'test@example.com',
                     ),
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: _authMode == AuthMode.ForgotPassword
+                        ? TextInputAction.done
+                        : TextInputAction.next,
                     controller: _emailController,
                     validator: (value) {
                       if (value!.isEmpty ||
@@ -426,6 +404,7 @@ class _AuthCardState extends State<AuthCard> {
                     decoration: InputDecoration(
                       labelText: 'Username',
                     ),
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty) {
                         return 'provide a username';
@@ -444,6 +423,7 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     obscureText: true,
                     controller: _passwordController,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty || value.length < 5) {
                         return 'password should contain at least 6 characters';
@@ -465,12 +445,14 @@ class _AuthCardState extends State<AuthCard> {
                     decoration: InputDecoration(
                       labelText: 'Confirm Password',
                     ),
+                    textInputAction: TextInputAction.next,
                     obscureText: true,
                     validator: _authMode == AuthMode.Signup
                         ? (value) {
                             if (value != _passwordController.text) {
                               return 'Passwords do not match!';
                             }
+                            return null;
                           }
                         : null,
                   ),
@@ -483,6 +465,7 @@ class _AuthCardState extends State<AuthCard> {
                       labelText: 'Mobile Number',
                     ),
                     keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty) {
                         return 'Invalid number!';
@@ -513,18 +496,18 @@ class _AuthCardState extends State<AuthCard> {
                           },
                         ),
                       ),
-                      DropdownButton<Interests>(
+                      PopupMenuButton<Interests>(
                         icon: const Icon(Icons.keyboard_arrow_down),
                         // Array list of items
-                        items: Interests.values.map((interest) {
-                          return DropdownMenuItem(
+                        itemBuilder: (_) => Interests.values.map((interest) {
+                          return PopupMenuItem(
                             value: interest,
                             child: Text(interest.toNameString()),
                           );
                         }).toList(),
                         // After selecting the desired option,it will
                         // change button value to selected value
-                        onChanged: (Interests? newValue) {
+                        onSelected: (Interests? newValue) {
                           setState(() {
                             _interestsController.text =
                                 newValue!.toNameString();
@@ -536,13 +519,13 @@ class _AuthCardState extends State<AuthCard> {
                 const SizedBox(
                   height: 20,
                 ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    if (_isLoading)
-                      const CircularProgressIndicator()
-                    else
+                if (_isLoading)
+                  const CircularProgressIndicator()
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
                       ElevatedButton(
                         key: WidgetKey.elevatedButton,
                         onPressed: _authMode == AuthMode.ForgotPassword
@@ -612,22 +595,22 @@ class _AuthCardState extends State<AuthCard> {
                           ],
                         ),
                       ),
-                    if (_authMode != AuthMode.ForgotPassword)
-                      TextButton(
-                        key: WidgetKey.textButton1,
-                        onPressed: _switchAuthMode,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20.0, vertical: 4),
-                          foregroundColor:
-                              Theme.of(context).colorScheme.primary,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      if (_authMode != AuthMode.ForgotPassword)
+                        TextButton(
+                          key: WidgetKey.textButton1,
+                          onPressed: _switchAuthMode,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20.0, vertical: 4),
+                            foregroundColor:
+                                Theme.of(context).colorScheme.primary,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                              '${_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile ? 'SIGNUP' : 'LOGIN'} INSTEAD'),
                         ),
-                        child: Text(
-                            '${_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile ? 'SIGNUP' : 'LOGIN'} INSTEAD'),
-                      ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 10),
                 if (_authMode == AuthMode.Login ||
                     _authMode == AuthMode.ForgotPassword)

@@ -13,7 +13,7 @@ class UserImagePicker extends StatefulWidget {
 
 class _UserImagePickerState extends State<UserImagePicker> {
   final _pick = ImagePicker();
-  late File _pickedImage;
+  File? _pickedImage;
 
   Future<void> _addImage() async {
     final imageFile = await _pick.pickImage(
@@ -34,7 +34,7 @@ class _UserImagePickerState extends State<UserImagePicker> {
           radius: 40,
           backgroundColor: Colors.grey,
           backgroundImage:
-              _pickedImage != null ? FileImage(_pickedImage) : null,
+              _pickedImage != null ? FileImage(_pickedImage!) : null,
         ),
         TextButton.icon(
           icon: const Icon(Icons.image),

@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import '../widgets/auth_card.dart';
 
 class AuthScreen extends StatelessWidget {
-  static const routeName = '/auth';
-
   @override
   Widget build(BuildContext context) {
     final deviceSize = MediaQuery.of(context).size;
@@ -39,7 +37,10 @@ class AuthScreen extends StatelessWidget {
                 children: <Widget>[
                   Flexible(
                     child: Container(
-                      margin: const EdgeInsets.only(bottom: 20.0),
+                      margin: const EdgeInsets.only(
+                        bottom: 15.0,
+                        top: 30.0,
+                      ),
                       padding: const EdgeInsets.symmetric(
                           vertical: 8.0, horizontal: 94.0),
                       transform: Matrix4.rotationZ(-8 * pi / 180)
@@ -67,9 +68,9 @@ class AuthScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Flexible(
-                    flex: deviceSize.width > 600 ? 2 : 1,
-                    child: const AuthCard(),
+                  const Flexible(
+                    flex: 2,
+                    child: AuthCard(),
                   ),
                 ],
               ),

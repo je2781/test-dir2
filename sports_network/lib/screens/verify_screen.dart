@@ -54,8 +54,11 @@ class _VerifyScreenState extends State<VerifyScreen> {
     await auth.currentUser!.reload();
     if (auth.currentUser!.emailVerified) {
       timer.cancel();
-      Navigator.of(context)
-          .pushReplacementNamed(TabsScreen.routeName);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => TabsScreen(),
+        ),
+      );
     }
   }
 }

@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../provider/user_info.dart';
@@ -13,49 +12,115 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
+    //connecting to the device media
+    final deviceSize = MediaQuery.of(context).size;
     return Scaffold(
       body: Container(
-        alignment: Alignment.centerLeft,
-        margin: const EdgeInsets.only(
-          top: 10,
+        height: deviceSize.height * .6,
+        decoration: BoxDecoration(
+          shape: BoxShape.rectangle,
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(20),
         ),
+        margin: EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+        alignment: Alignment.center,
         padding: const EdgeInsets.all(10),
-        child: ChangeNotifierProvider(
-          create: (_) => UserI(FirebaseAuth.instance.currentUser!),
-          child: FutureBuilder(
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else {
-                  final doc = snapshot.data;
-                  return Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundImage: NetworkImage(doc!['image_url']),
+        child: FutureBuilder(
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              } else if (!snapshot.hasData) {
+                return const Center(
+                  child: Text(
+                    'Start creating a new user profile',
+                    softWrap: true,
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              } else {
+                final doc = snapshot.data;
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 80,
+                      backgroundImage: NetworkImage(doc!['image_url']),
+                    ),
+                    const SizedBox(height: 20),
+                    ListTile(
+                      title: Row(
+                        children: [
+                          const Icon(Icons.person),
+                          const SizedBox(width: 10),
+                          Chip(
+                            label: Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Text(
+                                doc['username'],
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontFamily: 'Anton',
+                                ),
+                              ),
+                            ),
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 20),
-                      ListTile(
-                        title: Row(
-                          children: [
-                            const Icon(Icons.person),
-                            Text(doc['username']),
-                          ],
-                        ),
-                        subtitle: Row(
-                          children: [
-                            const Icon(Icons.phone),
-                            Text(doc['mobile']),
-                          ],
-                        ),
-                        trailing: Text('interested in ${doc['interest']}'),
-                      )
-                    ],
-                  );
-                }
-              },
-              future: Provider.of<UserI>(context, listen: false).userData),
-        ),
+                    ),
+                    ListTile(
+                      title: Row(
+                        children: [
+                          const Icon(Icons.phone),
+                          const SizedBox(width: 10),
+                          Chip(
+                            label: Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Text(
+                                doc['mobile'],
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontFamily: 'Anton',
+                                ),
+                              ),
+                            ),
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    ListTile(
+                      title: Row(
+                        children: [
+                          const Icon(Icons.sports),
+                          const SizedBox(width: 10),
+                          Chip(
+                            label: Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Text(
+                                doc['interest'],
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontFamily: 'Anton',
+                                ),
+                              ),
+                            ),
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }
+            },
+            future: Provider.of<Users>(context, listen: false).userData),
       ),
     );
   }
