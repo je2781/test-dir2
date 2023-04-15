@@ -17,8 +17,7 @@ class _TabsScreenState extends State<TabsScreen> {
   late List<Map<String, Object>> _pages;
   // creating an instance of firebaseauth using the api,
   final _auth = FirebaseAuth.instance;
-  //conditional variable to control loading indicator
-  var _isLoading = false;
+
   final _codeController = TextEditingController();
   NavigatorState? navigator;
 
@@ -28,11 +27,6 @@ class _TabsScreenState extends State<TabsScreen> {
     if (e.message != null) {
       errorMessage = e.message!;
     }
-
-    //removing loading indicator
-    setState(() {
-      _isLoading = false;
-    });
 
     await _showErrorDialog(errorMessage);
   }
@@ -58,6 +52,18 @@ class _TabsScreenState extends State<TabsScreen> {
     );
   }
 
+  Future<void> _handleDialog(
+      String verificationId, NavigatorState navigator) async {
+    final smsCode = _codeController.text.trim();
+    // Create a PhoneAuthCredential with the code
+    final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId, smsCode: smsCode);
+    //linking mobile to current user account
+    await _auth.currentUser!.linkWithCredential(credential);
+
+    navigator.pop();
+  }
+
   Future<void> _showSmsCodeDialog(
       String verificationId, NavigatorState navigator) async {
     await showDialog(
@@ -71,36 +77,19 @@ class _TabsScreenState extends State<TabsScreen> {
             TextField(
               controller: _codeController,
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _handleDialog(verificationId, navigator),
             ),
           ],
         ),
         actions: <Widget>[
-          if (_isLoading)
-            const CircularProgressIndicator()
-          else
-            TextButton(
-              child: Text("Done"),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.redAccent,
-              ),
-              onPressed: () async {
-                //setting loading indicator
-                setState(() {
-                  _isLoading = true;
-                });
-                final smsCode = _codeController.text.trim();
-                // Create a PhoneAuthCredential with the code
-                final credential = PhoneAuthProvider.credential(
-                    verificationId: verificationId, smsCode: smsCode);
-                //linking mobile to current user account
-                await _auth.currentUser!.linkWithCredential(credential);
-                //removing loading indicator
-                setState(() {
-                  _isLoading = false;
-                });
-                navigator.pop();
-              },
+          TextButton(
+            child: Text("Done"),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.redAccent,
             ),
+            onPressed: () => _handleDialog(verificationId, navigator),
+          ),
         ],
       ),
     );
@@ -146,10 +135,6 @@ class _TabsScreenState extends State<TabsScreen> {
           message = err.message!;
         }
 
-        //removing loading indicator
-        setState(() {
-          _isLoading = false;
-        });
         //scaffold page UI info dialog, informing on error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -16,8 +16,6 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
   final _emailController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  //conditional variable to control loading indicator
-  var _isLoading = false;
 
   //disposing controllers to prevent memory leaks
   @override
@@ -26,6 +24,61 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
     _emailController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+  }
+
+  Future<void> _handleDialog(String field, TextEditingController controller,
+      NavigatorState navigator, ScaffoldMessengerState scaffold) async {
+    final newValue = controller.text.trim();
+
+    try {
+      //using the firebaseauth api to update email/username
+      //so you can sign in with the new email/username
+      if (field == 'email') {
+        await _auth.currentUser!.updateEmail(newValue);
+        //updating field in firebasestore with new value
+        await FirebaseFirestore.instance
+            .collection('Users')
+            .doc(_auth.currentUser!.uid)
+            .update({field: newValue});
+      } else if (field == 'password') {
+        await _auth.currentUser!.updatePassword(newValue);
+      } else {
+        //updating field in firebasestore with new value
+        await FirebaseFirestore.instance
+            .collection('Users')
+            .doc(_auth.currentUser!.uid)
+            .update({field: newValue});
+      }
+
+      //UI dialog to inform user of  updated field
+      scaffold.showSnackBar(
+        SnackBar(
+          content: Text('$field has been updated!'),
+          duration: const Duration(
+            seconds: 2,
+          ),
+        ),
+      );
+      //clearing field controller
+      controller.clear();
+      //pop the dialog from the stack of routes
+
+      navigator.pop();
+    } on FirebaseAuthException catch (err) {
+      var message = 'There was an error updating your credentials';
+
+      if (err.message != null) {
+        message = err.message!;
+      }
+
+      //scaffold page UI info dialog, informing on error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).errorColor,
+        ),
+      );
+    }
   }
 
   Future<void> _showUpdateDialog(String field, TextEditingController controller,
@@ -40,81 +93,21 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
           children: <Widget>[
             TextField(
               controller: controller,
+              textInputAction: TextInputAction.done,
+              obscureText: field == 'password' ? true : false,
+              onSubmitted: (_) =>
+                  _handleDialog(field, controller, navigator, scaffold),
             ),
           ],
         ),
         actions: <Widget>[
-          if (_isLoading)
-            const CircularProgressIndicator()
-          else
-            TextButton(
+          TextButton(
               child: Text("Done"),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.redAccent,
               ),
-              onPressed: () async {
-                final newValue = controller.text.trim();
-
-                //setting loading indicator
-                setState(() {
-                  _isLoading = true;
-                });
-                try {
-                  //using the firebaseauth api to update email/username
-                  //so you can sign in with the new email/username
-                  if (field == 'email') {
-                    await _auth.currentUser!.updateEmail(newValue);
-                    //updating field in firebasestore with new value
-                    await FirebaseFirestore.instance
-                        .collection('Users')
-                        .doc(_auth.currentUser!.uid)
-                        .update({field: newValue});
-                  } else if (field == 'password') {
-                    await _auth.currentUser!.updatePassword(newValue);
-                  } else {
-                    //updating field in firebasestore with new value
-                    await FirebaseFirestore.instance
-                        .collection('Users')
-                        .doc(_auth.currentUser!.uid)
-                        .update({field: newValue});
-                  }
-
-                  //setting loading indicator
-                  setState(() {
-                    _isLoading = false;
-                  });
-                  //UI dialog to inform user of  updated field
-                  scaffold.showSnackBar(
-                    SnackBar(
-                      content: Text('$field has been updated!'),
-                      duration: const Duration(
-                        seconds: 2,
-                      ),
-                    ),
-                  );
-                  //pop the dialog from the stack of routes
-                  navigator.pop();
-                } on FirebaseAuthException catch (err) {
-                  var message = 'There was an error updating your credentials';
-
-                  if (err.message != null) {
-                    message = err.message!;
-                  }
-
-                  //removing loading indicator
-                  setState(() {
-                    _isLoading = false;
-                  });
-                  //scaffold page UI info dialog, informing on error message
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(message),
-                      backgroundColor: Theme.of(context).errorColor,
-                    ),
-                  );
-                }
-              },
-            ),
+              onPressed: () =>
+                  _handleDialog(field, controller, navigator, scaffold)),
         ],
       ),
     );
@@ -133,15 +126,6 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
               leading: const Icon(Icons.password),
               title: const Text('Change Password'),
               onTap: () async {
-                //UI dialog to inform user of  sent email
-                scaffold.showSnackBar(
-                  const SnackBar(
-                    content: Text('Update Password email sent!'),
-                    duration: Duration(
-                      seconds: 1,
-                    ),
-                  ),
-                );
                 await _showUpdateDialog(
                     'password', _passwordController, navigator, scaffold);
               },
@@ -151,15 +135,6 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
               leading: const Icon(Icons.email),
               title: const Text('Update Email'),
               onTap: () async {
-                //UI dialog to inform user of  sent email
-                scaffold.showSnackBar(
-                  const SnackBar(
-                    content: Text('Update Email email sent!'),
-                    duration: Duration(
-                      seconds: 1,
-                    ),
-                  ),
-                );
                 await _showUpdateDialog(
                     'email', _emailController, navigator, scaffold);
               },

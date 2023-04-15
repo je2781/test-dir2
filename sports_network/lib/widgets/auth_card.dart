@@ -79,6 +79,22 @@ class _AuthCardState extends State<AuthCard> {
     await _showErrorDialog(errorMessage);
   }
 
+  Future<void> _handleDialog(
+      String verificationId, NavigatorState navigator) async {
+    final smsCode = _codeController.text.trim();
+    // Create a PhoneAuthCredential with the code
+    final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId, smsCode: smsCode);
+    //signing in with phone auth credentials
+    await _auth.signInWithCredential(credential);
+
+    navigator.pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => TabsScreen(),
+      ),
+    );
+  }
+
   Future<void> _showSmsCodeDialog(
       String verificationId, NavigatorState navigator) async {
     await showDialog(
@@ -92,40 +108,19 @@ class _AuthCardState extends State<AuthCard> {
             TextField(
               controller: _codeController,
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _handleDialog(verificationId, navigator),
             ),
           ],
         ),
         actions: <Widget>[
-          if (_isLoading)
-            const CircularProgressIndicator()
-          else
-            TextButton(
-              child: Text("Done"),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.redAccent,
-              ),
-              onPressed: () async {
-                //setting loading indicator
-                setState(() {
-                  _isLoading = true;
-                });
-                final smsCode = _codeController.text.trim();
-                // Create a PhoneAuthCredential with the code
-                final credential = PhoneAuthProvider.credential(
-                    verificationId: verificationId, smsCode: smsCode);
-                //signing in with phone auth credentials
-                await _auth.signInWithCredential(credential);
-                //removing loading indicator
-                setState(() {
-                  _isLoading = false;
-                });
-                navigator.pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => TabsScreen(),
-                  ),
-                );
-              },
+          TextButton(
+            child: Text("Done"),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.redAccent,
             ),
+            onPressed: () => _handleDialog(verificationId, navigator),
+          ),
         ],
       ),
     );
@@ -289,6 +284,7 @@ class _AuthCardState extends State<AuthCard> {
     _passwordController.clear();
     _interestsController.clear();
     _mobileController.clear();
+
     if (_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile) {
       setState(() {
         _authMode = AuthMode.Signup;
@@ -303,6 +299,7 @@ class _AuthCardState extends State<AuthCard> {
   void _switchToForgotPasswordMode() {
     //clearing text field
     _emailController.clear();
+
     if (_authMode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.ForgotPassword;
@@ -316,6 +313,7 @@ class _AuthCardState extends State<AuthCard> {
     _passwordController.clear();
     _interestsController.clear();
     _mobileController.clear();
+
     if (mode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.Login;
@@ -348,13 +346,13 @@ class _AuthCardState extends State<AuthCard> {
         height: _authMode == AuthMode.Signup
             ? 600
             : _authMode == AuthMode.Login
-                ? 300
+                ? 320
                 : 200,
         constraints: BoxConstraints(
             minHeight: _authMode == AuthMode.Signup
                 ? 600
                 : _authMode == AuthMode.Login
-                    ? 300
+                    ? 320
                     : 200),
         width: deviceSize.width * 0.85,
         padding: EdgeInsets.only(
@@ -413,9 +411,7 @@ class _AuthCardState extends State<AuthCard> {
                       hintText: 'test@example.com',
                     ),
                     keyboardType: TextInputType.emailAddress,
-                    textInputAction: _authMode == AuthMode.ForgotPassword
-                        ? TextInputAction.done
-                        : TextInputAction.next,
+                    textInputAction: TextInputAction.next,
                     controller: _emailController,
                     validator: (value) {
                       if (value!.isEmpty ||
@@ -427,7 +423,6 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['email'] = value!;
                     },
-                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   TextFormField(
@@ -454,7 +449,9 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     obscureText: true,
                     controller: _passwordController,
-                    textInputAction: _authMode == AuthMode.Login ? TextInputAction.done : TextInputAction.next,
+                    textInputAction: _authMode == AuthMode.Login
+                        ? TextInputAction.done
+                        : TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty || value.length < 5) {
                         return 'password should contain at least 6 characters';
@@ -591,6 +588,11 @@ class _AuthCardState extends State<AuthCard> {
                                   );
                                 } on FirebaseAuthException catch (e) {
                                   var errorMessage = 'Password Reset failed.';
+
+                                  setState(() {
+                                    //removing loading indicator
+                                    _isLoading = false;
+                                  });
                                   switch (e.code) {
                                     case 'invalid-email':
                                       errorMessage =

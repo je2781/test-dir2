@@ -19,7 +19,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: FutureBuilder(
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return Container(
+                  height: 400,
+                  alignment: Alignment.center,
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
               } else {
                 final doc = snapshot.data;
                 return Column(
