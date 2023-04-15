@@ -28,8 +28,10 @@ class AuthCard extends StatefulWidget {
 }
 
 class _AuthCardState extends State<AuthCard> {
+  //connecting key to Form state
   final _formKey = GlobalKey<FormState>();
   AuthMode _authMode = AuthMode.Login;
+  //initializing authData
   var _authData = {
     'email': '',
     'password': '',
@@ -37,13 +39,18 @@ class _AuthCardState extends State<AuthCard> {
     'interest': '',
     'username': ''
   };
+  //conditional variable to control loading indicator
   var _isLoading = false;
+
   final _passwordController = TextEditingController();
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
   final _interestsController = TextEditingController();
+  final _mobileController = TextEditingController();
+
   //establishing connection to firebaseAuth api
   final _auth = FirebaseAuth.instance;
+  //defining user image file
   File? _userImageFile;
 
   //disposing controllers to prevent memory leaks
@@ -54,17 +61,14 @@ class _AuthCardState extends State<AuthCard> {
     _passwordController.dispose();
     _codeController.dispose();
     _interestsController.dispose();
-    // _futureGroup.close();
+    _mobileController.dispose();
   }
 
   void _mobileVerificationFailed(FirebaseAuthException e) async {
-    var errorMessage = 'Phone verification failed.';
-    switch (e.code) {
-      case 'invalid-phone-number':
-        errorMessage = 'The provided phone number is not valid.';
-        break;
-      default:
-        break;
+    var errorMessage = 'Phone Verification Failed!';
+
+    if (e.message != null) {
+      errorMessage = e.message!;
     }
 
     await _showErrorDialog(errorMessage);
@@ -81,6 +85,7 @@ class _AuthCardState extends State<AuthCard> {
           children: <Widget>[
             TextField(
               controller: _codeController,
+              keyboardType: TextInputType.number,
             ),
           ],
         ),
@@ -95,8 +100,7 @@ class _AuthCardState extends State<AuthCard> {
               // Create a PhoneAuthCredential with the code
               final credential = PhoneAuthProvider.credential(
                   verificationId: verificationId, smsCode: smsCode);
-
-              //signing in using phone auth credentials
+              //signin into account with created phone auth credential
               _auth.signInWithCredential(credential).then(
                     (_) => Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
@@ -189,9 +193,9 @@ class _AuthCardState extends State<AuthCard> {
             .signInWithEmailAndPassword(
                 email: _authData['email']!, password: _authData['password']!)
             .then(
-              (userCred) => Navigator.of(context).pushReplacement(
+              (_) => Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
-                  builder: (_) => TabsScreen(user: userCred.user),
+                  builder: (_) => TabsScreen(),
                 ),
               ),
             );
@@ -211,18 +215,17 @@ class _AuthCardState extends State<AuthCard> {
       } else {
         //signin using mobile number
         await _auth.verifyPhoneNumber(
-            phoneNumber: _authData['mobile']!,
-            verificationCompleted: (credential) async {
-              //signing in using phone auth credentials
+            phoneNumber: _authData['mobile'],
+            verificationCompleted: (credential) {
+              //signin into account with provided phone auth credential
               _auth.signInWithCredential(credential).then(
-                    (userCred) => Navigator.of(context).pushReplacement(
+                    (_) => Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
-                        builder: (_) => TabsScreen(user: userCred.user),
+                        builder: (_) => TabsScreen(),
                       ),
                     ),
                   );
             },
-            timeout: const Duration(seconds: 60),
             verificationFailed: (e) => _mobileVerificationFailed(e),
             codeSent: (String verificationId, int? forceResendingToken) async {
               //show dialog to take sms code from the user
@@ -268,6 +271,11 @@ class _AuthCardState extends State<AuthCard> {
   }
 
   void _switchAuthMode() {
+    //clearing text fields
+    _emailController.clear();
+    _passwordController.clear();
+    _interestsController.clear();
+    _mobileController.clear();
     if (_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile) {
       setState(() {
         _authMode = AuthMode.Signup;
@@ -280,15 +288,21 @@ class _AuthCardState extends State<AuthCard> {
   }
 
   void _switchToForgotPasswordMode() {
+    //clearing text field
+    _emailController.clear();
     if (_authMode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.ForgotPassword;
-        _emailController.clear();
       });
     }
   }
 
   void _switchLoginMode(AuthMode mode) {
+    //clearing text fields
+    _emailController.clear();
+    _passwordController.clear();
+    _interestsController.clear();
+    _mobileController.clear();
     if (mode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.Login;
@@ -360,14 +374,17 @@ class _AuthCardState extends State<AuthCard> {
                         height: 20,
                       ),
                       PopupMenuButton(
+                        key: WidgetKey.popupMenuButton,
                         onSelected: (mode) => _switchLoginMode(mode),
                         icon: const Icon(Icons.more_vert),
-                        itemBuilder: (_) => const [
+                        itemBuilder: (_) => [
                           PopupMenuItem(
+                            key: WidgetKey.popupMenuItemLoginWithMobile,
                             child: Text('Login With Mobile'),
                             value: AuthMode.LoginWithMobile,
                           ),
                           PopupMenuItem(
+                            key: WidgetKey.popupMenuItemLogin,
                             child: Text('Login With E/P'),
                             value: AuthMode.Login,
                           )
@@ -465,6 +482,7 @@ class _AuthCardState extends State<AuthCard> {
                       labelText: 'Mobile Number',
                     ),
                     keyboardType: TextInputType.phone,
+                    controller: _mobileController,
                     textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty) {
@@ -481,6 +499,7 @@ class _AuthCardState extends State<AuthCard> {
                     children: [
                       Expanded(
                         child: TextFormField(
+                          key: WidgetKey.interestsTextField,
                           controller: _interestsController,
                           decoration: const InputDecoration(
                             labelText: 'Sports Interests',

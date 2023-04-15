@@ -5,11 +5,7 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import './screens/auth_screen.dart';
-import './screens/setting_privacy_screen.dart';
-import './screens/buddies_screen.dart';
-import './screens/discover_screen.dart';
-import './screens/profile_screen.dart';
-import './screens/tabs_screen.dart';
+
 import './provider/user_info.dart';
 
 void main() async {

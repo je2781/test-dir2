@@ -21,8 +21,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           shape: BoxShape.rectangle,
           color: Colors.grey[300],
           borderRadius: BorderRadius.circular(20),
+          image: const DecorationImage(
+              fit: BoxFit.cover,
+              opacity: 0.6,
+              image: NetworkImage(
+                  'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Market_Square_Park.jpg/1024px-Market_Square_Park.jpg')),
         ),
-        margin: EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+        margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
         alignment: Alignment.center,
         padding: const EdgeInsets.all(10),
         child: FutureBuilder(
@@ -45,12 +50,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     CircleAvatar(
                       radius: 80,
                       backgroundImage: NetworkImage(doc!['image_url']),
+                      backgroundColor: Colors.grey,
                     ),
                     const SizedBox(height: 20),
                     ListTile(
                       title: Row(
                         children: [
-                          const Icon(Icons.person),
+                          const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                          ),
                           const SizedBox(width: 10),
                           Chip(
                             label: Padding(
@@ -73,7 +82,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ListTile(
                       title: Row(
                         children: [
-                          const Icon(Icons.phone),
+                          const Icon(
+                            Icons.phone,
+                            color: Colors.white,
+                          ),
                           const SizedBox(width: 10),
                           Chip(
                             label: Padding(
@@ -96,7 +108,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ListTile(
                       title: Row(
                         children: [
-                          const Icon(Icons.sports),
+                          const Icon(
+                            Icons.sports,
+                            color: Colors.white,
+                          ),
                           const SizedBox(width: 10),
                           Chip(
                             label: Padding(

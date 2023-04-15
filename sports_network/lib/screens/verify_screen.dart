@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import './tabs_screen.dart';
 
 class VerifyScreen extends StatefulWidget {
+  static const routeName = '/verify_screen';
   VerifyScreen({super.key});
 
   @override
@@ -14,7 +15,7 @@ class VerifyScreen extends StatefulWidget {
 
 class _VerifyScreenState extends State<VerifyScreen> {
   late Timer timer;
-  // late NavigatorState navigator;
+  // creating an instance of firebaseauth using the api,
   final auth = FirebaseAuth.instance;
 
   @override
@@ -24,12 +25,14 @@ class _VerifyScreenState extends State<VerifyScreen> {
     Future.delayed(Duration.zero).then((_) {
       // navigator = Navigator.of(context);
       auth.currentUser!.sendEmailVerification();
+      //initializing timer to check if email is verified every 2 sec
       timer = Timer.periodic(const Duration(seconds: 2), (timer) {
         _checkEmailIsVerified();
       });
     });
   }
 
+  //disposing timer to prevent memory leaks
   @override
   void dispose() {
     // TODO: implement dispose
@@ -53,6 +56,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
   Future<void> _checkEmailIsVerified() async {
     await auth.currentUser!.reload();
     if (auth.currentUser!.emailVerified) {
+      //disposing timer to prevent memory leaks
       timer.cancel();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(

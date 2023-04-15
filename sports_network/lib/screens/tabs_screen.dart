@@ -8,25 +8,22 @@ import './profile_screen.dart';
 import './setting_privacy_screen.dart';
 
 class TabsScreen extends StatefulWidget {
-  final User? user;
-  TabsScreen({this.user});
+  static const routeName = '/tabs_screen';
   @override
   State<TabsScreen> createState() => _TabsScreenState();
 }
 
 class _TabsScreenState extends State<TabsScreen> {
   late List<Map<String, Object>> _pages;
+  // creating an instance of firebaseauth using the api,
   final _auth = FirebaseAuth.instance;
   final _codeController = TextEditingController();
 
   void _mobileVerificationFailed(FirebaseAuthException e) async {
     var errorMessage = 'Phone Verification Failed!';
-    switch (e.code) {
-      case 'invalid-phone-number':
-        errorMessage = 'The provided phone number is not valid.';
-        break;
-      default:
-        break;
+
+    if (e.message != null) {
+      errorMessage = e.message!;
     }
 
     await _showErrorDialog(errorMessage);
@@ -110,17 +107,15 @@ class _TabsScreenState extends State<TabsScreen> {
   void initState() {
     // TODO: implement initStatel
     super.initState();
-    //stopping phoneauthprovider from attempting to link with already linked provider
-    if (widget.user == null) {
-      //connecting to firebasestore api to retrieve user mobile, and link it to email/password auth provider
-      FirebaseFirestore.instance
-          .collection('Users')
-          .doc(_auth.currentUser!.uid)
-          .get()
-          .then((doc) async {
-        await _getAuthVerifyPhone(doc['mobile']);
-      });
-    }
+
+    //connecting to firebasestore api to retrieve user mobile, and link it to email/password auth provider
+    FirebaseFirestore.instance
+        .collection('Users')
+        .doc(_auth.currentUser!.uid)
+        .get()
+        .then((doc) async {
+      await _getAuthVerifyPhone(doc['mobile']);
+    });
 
     //setting up menus for tabscreen
     _pages = [
@@ -131,10 +126,21 @@ class _TabsScreenState extends State<TabsScreen> {
     ];
   }
 
-  //disposing controllers to prevent memory leaks
+  // @override
+  // void didChangeDependencies() {
+  //   // TODO: implement didChangeDependencies
+  //   super.didChangeDependencies();
+  //   //unlinking phone auth provider from current user account to allow for phone reverification
+  //   Future.delayed(Duration.zero).then((_) async {
+  //     await _auth.currentUser!.unlink(PhoneAuthProvider.PROVIDER_ID);
+  //   });
+  // }
+
   @override
   void dispose() {
     super.dispose();
+    //disposing controllers to prevent memory leaks
+
     _codeController.dispose();
   }
 

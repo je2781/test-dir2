@@ -49,7 +49,7 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
             ),
             onPressed: () async {
               final newValue = controller.text.trim();
-              //using the firebaseauth package to update email/password
+              //using the firebaseauth api to update email/password
               //so you can sign in with the new email/password
               if (field == 'email') {
                 await _auth.currentUser!.updateEmail(newValue);
@@ -70,6 +70,7 @@ class _SettingPrivacyScreenState extends State<SettingPrivacyScreen> {
                     ),
                   ),
                 );
+                //pop the dialog from the stack of routes
                 Navigator.of(context).pop();
               });
             },
