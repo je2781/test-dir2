@@ -17,17 +17,18 @@ class _VerifyScreenState extends State<VerifyScreen> {
   late Timer timer;
   // creating an instance of firebaseauth using the api,
   final auth = FirebaseAuth.instance;
+  NavigatorState? navigator;
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
     Future.delayed(Duration.zero).then((_) {
-      // navigator = Navigator.of(context);
+      navigator = Navigator.of(context);
       auth.currentUser!.sendEmailVerification();
       //initializing timer to check if email is verified every 2 sec
       timer = Timer.periodic(const Duration(seconds: 2), (timer) {
-        _checkEmailIsVerified();
+        _checkEmailIsVerified(navigator!);
       });
     });
   }
@@ -53,12 +54,12 @@ class _VerifyScreenState extends State<VerifyScreen> {
     );
   }
 
-  Future<void> _checkEmailIsVerified() async {
+  Future<void> _checkEmailIsVerified(NavigatorState navigator) async {
     await auth.currentUser!.reload();
     if (auth.currentUser!.emailVerified) {
       //disposing timer to prevent memory leaks
       timer.cancel();
-      Navigator.of(context).pushReplacement(
+      navigator.pushReplacement(
         MaterialPageRoute(
           builder: (_) => TabsScreen(),
         ),

@@ -71,10 +71,16 @@ class _AuthCardState extends State<AuthCard> {
       errorMessage = e.message!;
     }
 
+    //removing loading indicator
+    setState(() {
+      _isLoading = false;
+    });
+
     await _showErrorDialog(errorMessage);
   }
 
-  Future<void> _showSmsCodeDialog(String verificationId) async {
+  Future<void> _showSmsCodeDialog(
+      String verificationId, NavigatorState navigator) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -90,26 +96,36 @@ class _AuthCardState extends State<AuthCard> {
           ],
         ),
         actions: <Widget>[
-          TextButton(
-            child: Text("Done"),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.redAccent,
+          if (_isLoading)
+            const CircularProgressIndicator()
+          else
+            TextButton(
+              child: Text("Done"),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.redAccent,
+              ),
+              onPressed: () async {
+                //setting loading indicator
+                setState(() {
+                  _isLoading = true;
+                });
+                final smsCode = _codeController.text.trim();
+                // Create a PhoneAuthCredential with the code
+                final credential = PhoneAuthProvider.credential(
+                    verificationId: verificationId, smsCode: smsCode);
+                //signing in with phone auth credentials
+                await _auth.signInWithCredential(credential);
+                //removing loading indicator
+                setState(() {
+                  _isLoading = false;
+                });
+                navigator.pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => TabsScreen(),
+                  ),
+                );
+              },
             ),
-            onPressed: () async {
-              final smsCode = _codeController.text.trim();
-              // Create a PhoneAuthCredential with the code
-              final credential = PhoneAuthProvider.credential(
-                  verificationId: verificationId, smsCode: smsCode);
-              //signin into account with created phone auth credential
-              _auth.signInWithCredential(credential).then(
-                    (_) => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => TabsScreen(),
-                      ),
-                    ),
-                  );
-            },
-          ),
         ],
       ),
     );
@@ -182,54 +198,51 @@ class _AuthCardState extends State<AuthCard> {
     // saving values in text fields
     _formKey.currentState!.save();
 
+    //set loading indicator
+    setState(() {
+      _isLoading = true;
+    });
     try {
-      //set loading indicator
-      setState(() {
-        _isLoading = true;
-      });
       if (_authMode == AuthMode.Login) {
         // Log in user with email/password
-        _auth
-            .signInWithEmailAndPassword(
-                email: _authData['email']!, password: _authData['password']!)
-            .then(
-              (_) => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => TabsScreen(),
-                ),
-              ),
-            );
+        await _auth.signInWithEmailAndPassword(
+            email: _authData['email']!, password: _authData['password']!);
+        navigator.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => TabsScreen(),
+          ),
+        );
       } else if (_authMode == AuthMode.Signup) {
         // Sign user up with email/password, and store extra values in the store using the firebasefirestore api
-        _getAuthSignUp(
-                _authData['email']!,
-                _authData['password']!,
-                _authData['mobile']!,
-                _authData['interest']!,
-                _authData['username']!)
-            .then((_) => navigator.pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => VerifyScreen(),
-                  ),
-                ));
+        await _getAuthSignUp(
+            _authData['email']!,
+            _authData['password']!,
+            _authData['mobile']!,
+            _authData['interest']!,
+            _authData['username']!);
+
+        navigator.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => VerifyScreen(),
+          ),
+        );
       } else {
         //signin using mobile number
         await _auth.verifyPhoneNumber(
             phoneNumber: _authData['mobile'],
-            verificationCompleted: (credential) {
+            verificationCompleted: (credential) async {
               //signin into account with provided phone auth credential
-              _auth.signInWithCredential(credential).then(
-                    (_) => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => TabsScreen(),
-                      ),
-                    ),
-                  );
+              await _auth.signInWithCredential(credential);
+              navigator.pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => TabsScreen(),
+                ),
+              );
             },
             verificationFailed: (e) => _mobileVerificationFailed(e),
             codeSent: (String verificationId, int? forceResendingToken) async {
               //show dialog to take sms code from the user
-              await _showSmsCodeDialog(verificationId);
+              await _showSmsCodeDialog(verificationId, navigator);
             },
             codeAutoRetrievalTimeout: (_) {});
       }
@@ -414,6 +427,7 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['email'] = value!;
                     },
+                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   TextFormField(
@@ -440,7 +454,7 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     obscureText: true,
                     controller: _passwordController,
-                    textInputAction: TextInputAction.next,
+                    textInputAction: _authMode == AuthMode.Login ? TextInputAction.done : TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty || value.length < 5) {
                         return 'password should contain at least 6 characters';
@@ -454,6 +468,7 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['password'] = value!;
                     },
+                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   TextFormField(
@@ -483,9 +498,14 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     keyboardType: TextInputType.phone,
                     controller: _mobileController,
-                    textInputAction: TextInputAction.next,
+                    textInputAction: _authMode == AuthMode.LoginWithMobile
+                        ? TextInputAction.done
+                        : TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty) {
+                        return 'please provide a mobile number!';
+                      }
+                      if (value.length < 10) {
                         return 'Invalid number!';
                       }
                       return null;
@@ -493,6 +513,7 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['mobile'] = value!.trim();
                     },
+                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   Row(
@@ -501,6 +522,7 @@ class _AuthCardState extends State<AuthCard> {
                         child: TextFormField(
                           key: WidgetKey.interestsTextField,
                           controller: _interestsController,
+                          textInputAction: TextInputAction.done,
                           decoration: const InputDecoration(
                             labelText: 'Sports Interests',
                           ),
@@ -513,6 +535,7 @@ class _AuthCardState extends State<AuthCard> {
                           onSaved: (value) {
                             _authData['interest'] = value!.trim();
                           },
+                          onFieldSubmitted: (_) => _submit(navigator),
                         ),
                       ),
                       PopupMenuButton<Interests>(
