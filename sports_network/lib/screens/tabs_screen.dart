@@ -17,7 +17,9 @@ class _TabsScreenState extends State<TabsScreen> {
   late List<Map<String, Object>> _pages;
   // creating an instance of firebaseauth using the api,
   final _auth = FirebaseAuth.instance;
+
   final _codeController = TextEditingController();
+  NavigatorState? navigator;
 
   void _mobileVerificationFailed(FirebaseAuthException e) async {
     var errorMessage = 'Phone Verification Failed!';
@@ -50,7 +52,20 @@ class _TabsScreenState extends State<TabsScreen> {
     );
   }
 
-  Future<void> _showSmsCodeDialog(String verificationId) async {
+  Future<void> _handleDialog(
+      String verificationId, NavigatorState navigator) async {
+    final smsCode = _codeController.text.trim();
+    // Create a PhoneAuthCredential with the code
+    final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId, smsCode: smsCode);
+    //linking mobile to current user account
+    await _auth.currentUser!.linkWithCredential(credential);
+
+    navigator.pop();
+  }
+
+  Future<void> _showSmsCodeDialog(
+      String verificationId, NavigatorState navigator) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -62,6 +77,8 @@ class _TabsScreenState extends State<TabsScreen> {
             TextField(
               controller: _codeController,
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _handleDialog(verificationId, navigator),
             ),
           ],
         ),
@@ -71,23 +88,15 @@ class _TabsScreenState extends State<TabsScreen> {
             style: TextButton.styleFrom(
               foregroundColor: Colors.redAccent,
             ),
-            onPressed: () async {
-              final smsCode = _codeController.text.trim();
-              // Create a PhoneAuthCredential with the code
-              final credential = PhoneAuthProvider.credential(
-                  verificationId: verificationId, smsCode: smsCode);
-              //linking mobile to current user account
-              _auth.currentUser!.linkWithCredential(credential).then((_) {
-                Navigator.of(context).pop();
-              });
-            },
+            onPressed: () => _handleDialog(verificationId, navigator),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _getAuthVerifyPhone(String mobile) async {
+  Future<void> _getAuthVerifyPhone(
+      String mobile, NavigatorState navigator) async {
     await _auth.verifyPhoneNumber(
         phoneNumber: mobile,
         verificationCompleted: (credential) async {
@@ -98,7 +107,7 @@ class _TabsScreenState extends State<TabsScreen> {
         verificationFailed: (e) => _mobileVerificationFailed(e),
         codeSent: (String verificationId, int? forceResendingToken) async {
           //show dialog to take sms code from the user
-          await _showSmsCodeDialog(verificationId);
+          await _showSmsCodeDialog(verificationId, navigator);
         },
         codeAutoRetrievalTimeout: (_) {});
   }
@@ -107,14 +116,33 @@ class _TabsScreenState extends State<TabsScreen> {
   void initState() {
     // TODO: implement initStatel
     super.initState();
+    Future.delayed(Duration.zero).then((_) async {
+      //initializing navigator state
+      navigator = Navigator.of(context);
+      try {
+        //connecting to firebasestore api to retrieve user mobile, and link it to email/password auth provider
 
-    //connecting to firebasestore api to retrieve user mobile, and link it to email/password auth provider
-    FirebaseFirestore.instance
-        .collection('Users')
-        .doc(_auth.currentUser!.uid)
-        .get()
-        .then((doc) async {
-      await _getAuthVerifyPhone(doc['mobile']);
+        final doc = await FirebaseFirestore.instance
+            .collection('Users')
+            .doc(_auth.currentUser!.uid)
+            .get();
+
+        await _getAuthVerifyPhone(doc['mobile'], navigator!);
+      } on FirebaseAuthException catch (err) {
+        var message = 'There was an error linking your credentials';
+
+        if (err.message != null) {
+          message = err.message!;
+        }
+
+        //scaffold page UI info dialog, informing on error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).errorColor,
+          ),
+        );
+      }
     });
 
     //setting up menus for tabscreen

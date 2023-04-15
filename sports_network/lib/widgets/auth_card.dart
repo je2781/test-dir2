@@ -71,10 +71,32 @@ class _AuthCardState extends State<AuthCard> {
       errorMessage = e.message!;
     }
 
+    //removing loading indicator
+    setState(() {
+      _isLoading = false;
+    });
+
     await _showErrorDialog(errorMessage);
   }
 
-  Future<void> _showSmsCodeDialog(String verificationId) async {
+  Future<void> _handleDialog(
+      String verificationId, NavigatorState navigator) async {
+    final smsCode = _codeController.text.trim();
+    // Create a PhoneAuthCredential with the code
+    final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId, smsCode: smsCode);
+    //signing in with phone auth credentials
+    await _auth.signInWithCredential(credential);
+
+    navigator.pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => TabsScreen(),
+      ),
+    );
+  }
+
+  Future<void> _showSmsCodeDialog(
+      String verificationId, NavigatorState navigator) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -86,6 +108,8 @@ class _AuthCardState extends State<AuthCard> {
             TextField(
               controller: _codeController,
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _handleDialog(verificationId, navigator),
             ),
           ],
         ),
@@ -95,20 +119,7 @@ class _AuthCardState extends State<AuthCard> {
             style: TextButton.styleFrom(
               foregroundColor: Colors.redAccent,
             ),
-            onPressed: () async {
-              final smsCode = _codeController.text.trim();
-              // Create a PhoneAuthCredential with the code
-              final credential = PhoneAuthProvider.credential(
-                  verificationId: verificationId, smsCode: smsCode);
-              //signin into account with created phone auth credential
-              _auth.signInWithCredential(credential).then(
-                    (_) => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => TabsScreen(),
-                      ),
-                    ),
-                  );
-            },
+            onPressed: () => _handleDialog(verificationId, navigator),
           ),
         ],
       ),
@@ -182,54 +193,51 @@ class _AuthCardState extends State<AuthCard> {
     // saving values in text fields
     _formKey.currentState!.save();
 
+    //set loading indicator
+    setState(() {
+      _isLoading = true;
+    });
     try {
-      //set loading indicator
-      setState(() {
-        _isLoading = true;
-      });
       if (_authMode == AuthMode.Login) {
         // Log in user with email/password
-        _auth
-            .signInWithEmailAndPassword(
-                email: _authData['email']!, password: _authData['password']!)
-            .then(
-              (_) => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => TabsScreen(),
-                ),
-              ),
-            );
+        await _auth.signInWithEmailAndPassword(
+            email: _authData['email']!, password: _authData['password']!);
+        navigator.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => TabsScreen(),
+          ),
+        );
       } else if (_authMode == AuthMode.Signup) {
         // Sign user up with email/password, and store extra values in the store using the firebasefirestore api
-        _getAuthSignUp(
-                _authData['email']!,
-                _authData['password']!,
-                _authData['mobile']!,
-                _authData['interest']!,
-                _authData['username']!)
-            .then((_) => navigator.pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => VerifyScreen(),
-                  ),
-                ));
+        await _getAuthSignUp(
+            _authData['email']!,
+            _authData['password']!,
+            _authData['mobile']!,
+            _authData['interest']!,
+            _authData['username']!);
+
+        navigator.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => VerifyScreen(),
+          ),
+        );
       } else {
         //signin using mobile number
         await _auth.verifyPhoneNumber(
             phoneNumber: _authData['mobile'],
-            verificationCompleted: (credential) {
+            verificationCompleted: (credential) async {
               //signin into account with provided phone auth credential
-              _auth.signInWithCredential(credential).then(
-                    (_) => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => TabsScreen(),
-                      ),
-                    ),
-                  );
+              await _auth.signInWithCredential(credential);
+              navigator.pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => TabsScreen(),
+                ),
+              );
             },
             verificationFailed: (e) => _mobileVerificationFailed(e),
             codeSent: (String verificationId, int? forceResendingToken) async {
               //show dialog to take sms code from the user
-              await _showSmsCodeDialog(verificationId);
+              await _showSmsCodeDialog(verificationId, navigator);
             },
             codeAutoRetrievalTimeout: (_) {});
       }
@@ -276,6 +284,7 @@ class _AuthCardState extends State<AuthCard> {
     _passwordController.clear();
     _interestsController.clear();
     _mobileController.clear();
+
     if (_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile) {
       setState(() {
         _authMode = AuthMode.Signup;
@@ -290,6 +299,7 @@ class _AuthCardState extends State<AuthCard> {
   void _switchToForgotPasswordMode() {
     //clearing text field
     _emailController.clear();
+
     if (_authMode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.ForgotPassword;
@@ -303,6 +313,7 @@ class _AuthCardState extends State<AuthCard> {
     _passwordController.clear();
     _interestsController.clear();
     _mobileController.clear();
+
     if (mode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.Login;
@@ -335,13 +346,13 @@ class _AuthCardState extends State<AuthCard> {
         height: _authMode == AuthMode.Signup
             ? 600
             : _authMode == AuthMode.Login
-                ? 300
+                ? 320
                 : 200,
         constraints: BoxConstraints(
             minHeight: _authMode == AuthMode.Signup
                 ? 600
                 : _authMode == AuthMode.Login
-                    ? 300
+                    ? 320
                     : 200),
         width: deviceSize.width * 0.85,
         padding: EdgeInsets.only(
@@ -400,9 +411,7 @@ class _AuthCardState extends State<AuthCard> {
                       hintText: 'test@example.com',
                     ),
                     keyboardType: TextInputType.emailAddress,
-                    textInputAction: _authMode == AuthMode.ForgotPassword
-                        ? TextInputAction.done
-                        : TextInputAction.next,
+                    textInputAction: TextInputAction.next,
                     controller: _emailController,
                     validator: (value) {
                       if (value!.isEmpty ||
@@ -440,7 +449,9 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     obscureText: true,
                     controller: _passwordController,
-                    textInputAction: TextInputAction.next,
+                    textInputAction: _authMode == AuthMode.Login
+                        ? TextInputAction.done
+                        : TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty || value.length < 5) {
                         return 'password should contain at least 6 characters';
@@ -454,6 +465,7 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['password'] = value!;
                     },
+                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   TextFormField(
@@ -483,9 +495,14 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     keyboardType: TextInputType.phone,
                     controller: _mobileController,
-                    textInputAction: TextInputAction.next,
+                    textInputAction: _authMode == AuthMode.LoginWithMobile
+                        ? TextInputAction.done
+                        : TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty) {
+                        return 'please provide a mobile number!';
+                      }
+                      if (value.length < 10) {
                         return 'Invalid number!';
                       }
                       return null;
@@ -493,6 +510,7 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['mobile'] = value!.trim();
                     },
+                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   Row(
@@ -501,6 +519,7 @@ class _AuthCardState extends State<AuthCard> {
                         child: TextFormField(
                           key: WidgetKey.interestsTextField,
                           controller: _interestsController,
+                          textInputAction: TextInputAction.done,
                           decoration: const InputDecoration(
                             labelText: 'Sports Interests',
                           ),
@@ -513,6 +532,7 @@ class _AuthCardState extends State<AuthCard> {
                           onSaved: (value) {
                             _authData['interest'] = value!.trim();
                           },
+                          onFieldSubmitted: (_) => _submit(navigator),
                         ),
                       ),
                       PopupMenuButton<Interests>(
@@ -568,6 +588,11 @@ class _AuthCardState extends State<AuthCard> {
                                   );
                                 } on FirebaseAuthException catch (e) {
                                   var errorMessage = 'Password Reset failed.';
+
+                                  setState(() {
+                                    //removing loading indicator
+                                    _isLoading = false;
+                                  });
                                   switch (e.code) {
                                     case 'invalid-email':
                                       errorMessage =
