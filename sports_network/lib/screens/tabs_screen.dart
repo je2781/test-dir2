@@ -120,6 +120,13 @@ class _TabsScreenState extends State<TabsScreen> {
       //initializing navigator state
       navigator = Navigator.of(context);
       try {
+        //refreshing user
+        await _auth.currentUser!.reload();
+        //preventing provider from relinking with current user
+        if (_auth.currentUser!.providerData.length > 1) {
+          return;
+        }
+
         //connecting to firebasestore api to retrieve user mobile, and link it to email/password auth provider
 
         final doc = await FirebaseFirestore.instance
@@ -129,7 +136,8 @@ class _TabsScreenState extends State<TabsScreen> {
 
         await _getAuthVerifyPhone(doc['mobile'], navigator!);
       } on FirebaseAuthException catch (err) {
-        var message = 'There was an error linking your credentials';
+        var message =
+            'There was an error with linking/unlinking PhoneAuthProvider';
 
         if (err.message != null) {
           message = err.message!;
@@ -138,9 +146,9 @@ class _TabsScreenState extends State<TabsScreen> {
         //scaffold page UI info dialog, informing on error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(message),
-            backgroundColor: Theme.of(context).errorColor,
-          ),
+              content: Text(message),
+              backgroundColor: Theme.of(context).errorColor,
+              duration: const Duration(seconds: 2)),
         );
       }
     });
