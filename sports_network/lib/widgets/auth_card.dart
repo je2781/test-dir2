@@ -314,6 +314,8 @@ class _AuthCardState extends State<AuthCard> {
     _interestsController.clear();
     _mobileController.clear();
 
+    _formKey.currentState!.validate();
+
     if (mode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.Login;
@@ -347,13 +349,13 @@ class _AuthCardState extends State<AuthCard> {
             ? 600
             : _authMode == AuthMode.Login
                 ? 320
-                : 200,
+                : 220,
         constraints: BoxConstraints(
             minHeight: _authMode == AuthMode.Signup
                 ? 600
                 : _authMode == AuthMode.Login
                     ? 320
-                    : 200),
+                    : 220),
         width: deviceSize.width * 0.85,
         padding: EdgeInsets.only(
             left: 16.0,
@@ -411,13 +413,14 @@ class _AuthCardState extends State<AuthCard> {
                       hintText: 'test@example.com',
                     ),
                     keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
                     controller: _emailController,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty ||
                           !RegExpressions.emailPattern.hasMatch(value)) {
                         return 'Invalid email!';
                       }
+
                       return null;
                     },
                     onSaved: (value) {
@@ -448,12 +451,13 @@ class _AuthCardState extends State<AuthCard> {
                       labelText: 'Password',
                     ),
                     obscureText: true,
-                    controller: _passwordController,
                     textInputAction: TextInputAction.next,
+                    controller: _passwordController,
                     validator: (value) {
-                      if (value!.isEmpty || value.length < 5) {
+                      if (value!.isEmpty || value.length < 6) {
                         return 'password should contain at least 6 characters';
                       }
+
                       if (!RegExpressions.passwordPattern.hasMatch(value)) {
                         return '''password shouldn't contain special characters 
                                   %*()#''';
@@ -471,24 +475,25 @@ class _AuthCardState extends State<AuthCard> {
                     decoration: InputDecoration(
                       labelText: 'Confirm Password',
                     ),
-                    textInputAction: TextInputAction.next,
                     obscureText: true,
+                    textInputAction: TextInputAction.next,
                     validator: _authMode == AuthMode.Signup
                         ? (value) {
                             if (value != _passwordController.text) {
                               return 'Passwords do not match!';
                             }
+
                             return null;
                           }
                         : null,
                   ),
                 if (_authMode == AuthMode.Signup ||
                     _authMode == AuthMode.LoginWithMobile)
-                  MaskedTextField(
+                  TextFormField(
                     key: WidgetKey.mobileTextField,
-                    mask: '+### ### ### ####',
                     decoration: InputDecoration(
                       labelText: 'Mobile Number',
+                      hintText: '+447876334830',
                     ),
                     keyboardType: TextInputType.phone,
                     controller: _mobileController,
@@ -497,9 +502,14 @@ class _AuthCardState extends State<AuthCard> {
                       if (value!.isEmpty) {
                         return 'please provide a mobile number!';
                       }
-                      if (value.length < 10) {
-                        return 'Invalid number!';
+                      if (value.trim().length < 10) {
+                        return 'invalid number!';
                       }
+
+                      if (!RegExpressions.phoneNoPattern.hasMatch(value)) {
+                        return 'provider a country code prefixed with (\'+\') sign';
+                      }
+
                       return null;
                     },
                     onSaved: (value) {
@@ -521,6 +531,7 @@ class _AuthCardState extends State<AuthCard> {
                             if (value!.isEmpty) {
                               return 'Please choose an interest';
                             }
+
                             return null;
                           },
                           onSaved: (value) {
@@ -659,7 +670,11 @@ class _AuthCardState extends State<AuthCard> {
                     key: WidgetKey.textButton2,
                     onPressed: () {
                       if (_authMode == AuthMode.ForgotPassword) {
-                        setState(() => _authMode = AuthMode.Login);
+                        setState(() {
+                          //clearing email text field
+                          _emailController.clear();
+                          _authMode = AuthMode.Login;
+                        });
                       } else {
                         _switchToForgotPasswordMode();
                       }
