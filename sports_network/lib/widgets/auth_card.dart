@@ -611,6 +611,9 @@ class _AuthCardState extends State<AuthCard> {
                                 setState(() {
                                   //removing loading indicator
                                   _isLoading = false;
+                                  //clearing email text field
+                                  _emailController.clear();
+
                                   //switching back to login mode
                                   _authMode = AuthMode.Login;
                                 });
