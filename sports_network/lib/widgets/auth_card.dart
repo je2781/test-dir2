@@ -449,9 +449,7 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     obscureText: true,
                     controller: _passwordController,
-                    textInputAction: _authMode == AuthMode.Login
-                        ? TextInputAction.done
-                        : TextInputAction.next,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty || value.length < 5) {
                         return 'password should contain at least 6 characters';
@@ -465,7 +463,6 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['password'] = value!;
                     },
-                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   TextFormField(
@@ -495,9 +492,7 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     keyboardType: TextInputType.phone,
                     controller: _mobileController,
-                    textInputAction: _authMode == AuthMode.LoginWithMobile
-                        ? TextInputAction.done
-                        : TextInputAction.next,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty) {
                         return 'please provide a mobile number!';
@@ -510,7 +505,6 @@ class _AuthCardState extends State<AuthCard> {
                     onSaved: (value) {
                       _authData['mobile'] = value!.trim();
                     },
-                    onFieldSubmitted: (_) => _submit(navigator),
                   ),
                 if (_authMode == AuthMode.Signup)
                   Row(
