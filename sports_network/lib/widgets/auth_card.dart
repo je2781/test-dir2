@@ -4,8 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:async/async.dart';
-import 'package:masked_text/masked_text.dart';
+import 'package:fl_country_code_picker/fl_country_code_picker.dart';
 
 import '../data/reg_express.dart';
 import '../data/widget_keys.dart';
@@ -28,6 +27,10 @@ class AuthCard extends StatefulWidget {
 }
 
 class _AuthCardState extends State<AuthCard> {
+  //creating instance of country picker
+  final countryPicker = const FlCountryCodePicker();
+  //defining country code variable
+  CountryCode? countryCode;
   //connecting key to Form state
   final _formKey = GlobalKey<FormState>();
   AuthMode _authMode = AuthMode.Login;
@@ -190,6 +193,18 @@ class _AuthCardState extends State<AuthCard> {
       );
       return;
     }
+    //checking if country code was selected
+    if (countryCode == null &&
+        (_authMode == AuthMode.Signup ||
+            _authMode == AuthMode.LoginWithMobile)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('please select a country code'),
+          backgroundColor: Theme.of(context).errorColor,
+        ),
+      );
+      return;
+    }
     // saving values in text fields
     _formKey.currentState!.save();
 
@@ -287,6 +302,8 @@ class _AuthCardState extends State<AuthCard> {
 
     if (_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile) {
       setState(() {
+        //resetting country code variable
+        countryCode = null;
         _authMode = AuthMode.Signup;
       });
     } else {
@@ -314,14 +331,14 @@ class _AuthCardState extends State<AuthCard> {
     _interestsController.clear();
     _mobileController.clear();
 
-    _formKey.currentState!.validate();
-
     if (mode == AuthMode.Login) {
       setState(() {
         _authMode = AuthMode.Login;
       });
     } else {
       setState(() {
+        //resetting country code variable
+        countryCode = null;
         _authMode = AuthMode.LoginWithMobile;
       });
     }
@@ -482,7 +499,6 @@ class _AuthCardState extends State<AuthCard> {
                             if (value != _passwordController.text) {
                               return 'Passwords do not match!';
                             }
-
                             return null;
                           }
                         : null,
@@ -491,29 +507,76 @@ class _AuthCardState extends State<AuthCard> {
                     _authMode == AuthMode.LoginWithMobile)
                   TextFormField(
                     key: WidgetKey.mobileTextField,
+                    controller: _mobileController,
                     decoration: InputDecoration(
                       labelText: 'Mobile Number',
-                      hintText: '+447876334830',
+                      prefixIcon: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 6,
+                        ),
+                        margin: const EdgeInsets.only(
+                          right: 5,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () async {
+                                final code = await countryPicker.showPicker(
+                                    context: context);
+                                setState(() {
+                                  countryCode = code;
+                                });
+                              },
+                              child: Row(
+                                children: [
+                                  if (countryCode != null)
+                                    Container(child: countryCode!.flagImage()),
+                                  if (countryCode != null)
+                                    const SizedBox(
+                                      width: 10,
+                                    ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      borderRadius: BorderRadius.circular(7),
+                                    ),
+                                    child: Text(
+                                      countryCode?.dialCode ?? '+1',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
+                      ),
                     ),
                     keyboardType: TextInputType.phone,
-                    controller: _mobileController,
                     textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value!.isEmpty) {
                         return 'please provide a mobile number!';
                       }
+
                       if (value.trim().length < 10) {
                         return 'invalid number!';
-                      }
-
-                      if (!RegExpressions.phoneNoPattern.hasMatch(value)) {
-                        return 'provider a country code prefixed with (\'+\') sign';
                       }
 
                       return null;
                     },
                     onSaved: (value) {
-                      _authData['mobile'] = value!.trim();
+                      _authData['mobile'] =
+                          '${countryCode!.dialCode}${value!.trim().substring(1)}';
                     },
                   ),
                 if (_authMode == AuthMode.Signup)
@@ -592,12 +655,9 @@ class _AuthCardState extends State<AuthCard> {
                                     ),
                                   );
                                 } on FirebaseAuthException catch (e) {
-                                  var errorMessage = 'Password Reset failed.';
+                                  var errorMessage =
+                                      'Password Reset failed. Please check your entered email address';
 
-                                  setState(() {
-                                    //removing loading indicator
-                                    _isLoading = false;
-                                  });
                                   switch (e.code) {
                                     case 'invalid-email':
                                       errorMessage =

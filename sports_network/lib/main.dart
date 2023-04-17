@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fl_country_code_picker/fl_country_code_picker.dart' as flc;
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import './screens/auth_screen.dart';
 
@@ -26,6 +28,13 @@ class MyApp extends StatelessWidget {
       create: (_) => Users(FirebaseAuth.instance.currentUser!),
       child: MaterialApp(
         title: 'Sports Network',
+        supportedLocales: flc.supportedLocales.map((e) => Locale(e)),
+        localizationsDelegates: const [
+          GlobalWidgetsLocalizations.delegate,
+          flc.CountryLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate
+        ],
         theme: ThemeData(
           colorScheme: ColorScheme.fromSwatch(
             primarySwatch: Colors.purple,
