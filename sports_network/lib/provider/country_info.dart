@@ -20,32 +20,32 @@ class CountryInfo with ChangeNotifier {
   Future<void> fetchAndSetCountryData() async {
     var url = Uri.parse('http://ip-api.com/json/');
     try {
+      //fetching country data based on geo location
       final geoLocationResponse = await http.get(url);
 
-      final geoLocationData =
-          json.decode(geoLocationResponse.body) as Map<String, String>;
+      final geoLocationData = json.decode(geoLocationResponse.body);
+      //fetching countries calling codes data
+      url = Uri.parse('https://countrycode.dev/api/calls');
 
-      url = Uri.parse(
-          'http://api.countrylayer.com/v2/all?access_key=4aea92b8eebc125ef99333ff6d989ea3');
+      final countriesCallingCodeResponse = await http.get(url);
 
-      final countriesDataResponse = await http.get(url);
+      final countriesCallingCodeData =
+          json.decode(countriesCallingCodeResponse.body);
+      //extracting geo located country calling code
+      final countryCallingCodeData = countriesCallingCodeData.firstWhere(
+          (data) => data['country_name'] == (geoLocationData['country']));
 
-      final countriesData = json.decode(countriesDataResponse.body);
-
-      final countryData = countriesData.firstWhere(
-          (data) => data['alpha2Code'] == geoLocationData['countryCode']);
-
-      _countryDialCode = countryData['callingCodes'][0];
-
+      _countryDialCode = countryCallingCodeData['phone_code'];
+      //setting flag image url of country
       _imageUrl =
-          'https://flagsapi.com/${countryData['alpha2Code']}/shiny/64.png';
-
-      notifyListeners();
+          'https://flagsapi.com/${geoLocationData['countryCode']}/flat/32.png';
 
       if (geoLocationData['status'] != 'success' ||
-          countriesData['success'] == false) {
+          countriesCallingCodeResponse.statusCode >= 400) {
         throw HttpException('Something went wrong');
       }
+
+      notifyListeners();
     } catch (_) {
       rethrow;
     }

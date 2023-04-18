@@ -9,6 +9,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import './screens/auth_screen.dart';
 
 import './provider/user_info.dart';
+import './provider/country_info.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,8 +25,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => Users(FirebaseAuth.instance.currentUser!),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => Users(FirebaseAuth.instance.currentUser!),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => CountryInfo(),
+        )
+      ],
       child: MaterialApp(
         title: 'Sports Network',
         supportedLocales: flc.supportedLocales.map((e) => Locale(e)),
