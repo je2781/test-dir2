@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fl_country_code_picker/fl_country_code_picker.dart';
+import "package:provider/provider.dart";
 
 import '../data/reg_express.dart';
 import '../data/widget_keys.dart';
@@ -14,6 +15,7 @@ import '../picker/user_image_picker.dart';
 
 import '../data/extensions.dart';
 import '../models/interests.dart';
+import '../provider/country_info.dart';
 
 enum AuthMode { Signup, Login, ForgotPassword, LoginWithMobile }
 
@@ -55,6 +57,21 @@ class _AuthCardState extends State<AuthCard> {
   final _auth = FirebaseAuth.instance;
   //defining user image file
   File? _userImageFile;
+
+  //fetching country data based on geo location
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration.zero).then((_) async {
+      try {
+        await Provider.of<CountryInfo>(context, listen: false)
+            .fetchAndSetCountryData();
+      } on HttpException catch (_) {
+        var errMessage = 'failed to fetch country data';
+        await _showErrorDialog(errMessage);
+      }
+    });
+  }
 
   //disposing controllers to prevent memory leaks
   @override
@@ -193,18 +210,7 @@ class _AuthCardState extends State<AuthCard> {
       );
       return;
     }
-    //checking if country code was selected
-    if (countryCode == null &&
-        (_authMode == AuthMode.Signup ||
-            _authMode == AuthMode.LoginWithMobile)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('please select a country code'),
-          backgroundColor: Theme.of(context).errorColor,
-        ),
-      );
-      return;
-    }
+
     // saving values in text fields
     _formKey.currentState!.save();
 
@@ -302,7 +308,7 @@ class _AuthCardState extends State<AuthCard> {
 
     if (_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile) {
       setState(() {
-        //resetting country code variable
+        //resetting country code varriable
         countryCode = null;
         _authMode = AuthMode.Signup;
       });
@@ -337,7 +343,7 @@ class _AuthCardState extends State<AuthCard> {
       });
     } else {
       setState(() {
-        //resetting country code variable
+        //resetting country code varriable
         countryCode = null;
         _authMode = AuthMode.LoginWithMobile;
       });
@@ -350,7 +356,9 @@ class _AuthCardState extends State<AuthCard> {
 
   @override
   Widget build(BuildContext context) {
-    //connecting to naviagtor state to be aware of route changes
+    //connecting to country store to be aware of changes in country info state
+    final countryStore = Provider.of<CountryInfo>(context);
+    //connecting to navigator state to be aware of route changes
     final navigator = Navigator.of(context);
     //connecting to the device media
     final deviceSize = MediaQuery.of(context).size;
@@ -531,15 +539,16 @@ class _AuthCardState extends State<AuthCard> {
                               },
                               child: Row(
                                 children: [
-                                  if (countryCode != null)
-                                    Container(child: countryCode!.flagImage()),
-                                  if (countryCode != null)
-                                    const SizedBox(
-                                      width: 10,
-                                    ),
+                                  Container(
+                                      child: countryCode?.flagImage() ??
+                                          Image.network(
+                                              countryStore.imageUrl!)),
+                                  const SizedBox(
+                                    width: 5,
+                                  ),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
+                                      horizontal: 6,
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
@@ -547,11 +556,20 @@ class _AuthCardState extends State<AuthCard> {
                                           Theme.of(context).colorScheme.primary,
                                       borderRadius: BorderRadius.circular(7),
                                     ),
-                                    child: Text(
-                                      countryCode?.dialCode ?? '+1',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                      ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          countryCode?.dialCode ??
+                                              countryStore.dialCode!,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const Icon(
+                                          Icons.arrow_drop_down,
+                                          color: Colors.white,
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -572,11 +590,11 @@ class _AuthCardState extends State<AuthCard> {
                         return 'invalid number!';
                       }
 
-                      return null;
+                      return null;        
                     },
                     onSaved: (value) {
                       _authData['mobile'] =
-                          '${countryCode!.dialCode}${value!.trim().substring(1)}';
+                          '${countryCode?.dialCode ?? countryStore.dialCode}${value!.trim().substring(1)}';
                     },
                   ),
                 if (_authMode == AuthMode.Signup)
