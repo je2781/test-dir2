@@ -1,53 +1,86 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
-import '../models/http_exception.dart';
+import '../models/location_exception.dart';
 
 class CountryInfo with ChangeNotifier {
   String? _imageUrl;
   String? _countryDialCode;
+  Position? _position;
+  String? _currentCountry;
 
   String? get imageUrl {
     return _imageUrl;
   }
 
   String? get dialCode {
-    return '+$_countryDialCode';
+    return _countryDialCode;
   }
 
+  Future<String> _getCountryNameFromLatLng(Position position) async {
+    final placemarks =
+        await placemarkFromCoordinates(position.latitude, position.longitude);
+    final place = placemarks[0];
+    return place.country!;
+  }
+
+
   Future<void> fetchAndSetCountryData() async {
-    var url = Uri.parse('http://ip-api.com/json/');
     try {
-      //fetching country data based on geo location
-      final geoLocationResponse = await http.get(url);
+      //getting geo location of user device
+      final currentPosition = await _determineLocation();
+      //extracting address from location coordinates
+      _currentCountry = await _getCountryNameFromLatLng(currentPosition);
 
-      final geoLocationData = json.decode(geoLocationResponse.body);
-      //fetching countries calling codes data
-      url = Uri.parse('https://countrycode.dev/api/calls');
+      // Fetch country codes from the json file
+      final countryCodesResponse =
+          await rootBundle.loadString('assets/CountryCodes.json');
+      final listOfCountryCodes = json.decode(countryCodesResponse);
+     
+      // extracting current country code data
+      final countryCodeData = listOfCountryCodes
+          .firstWhere((data) => data['name'] == _currentCountry);
+      //setting dial code of current country
+      _countryDialCode = countryCodeData['dial_code'];
 
-      final countriesCallingCodeResponse = await http.get(url);
-
-      final countriesCallingCodeData =
-          json.decode(countriesCallingCodeResponse.body);
-      //extracting geo located country calling code
-      final countryCallingCodeData = countriesCallingCodeData.firstWhere(
-          (data) => data['country_name'] == (geoLocationData['country']));
-
-      _countryDialCode = countryCallingCodeData['phone_code'];
-      //setting flag image url of country
-      _imageUrl =
-          'https://flagsapi.com/${geoLocationData['countryCode']}/flat/32.png';
-
-      if (geoLocationData['status'] != 'success' ||
-          countriesCallingCodeResponse.statusCode >= 400) {
-        throw HttpException('Something went wrong');
-      }
+      //setting flag image url of current country
+      _imageUrl = 'https://flagsapi.com/${countryCodeData['code']}/flat/32.png';
 
       notifyListeners();
     } catch (_) {
       rethrow;
     }
+  }
+
+  Future<Position> _determineLocation() async {
+    LocationPermission permission;
+    bool serviceEnabled;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return Future.error(LocationException(
+          'Location services are disabled. Please enable the services'));
+    }
+
+    permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return Future.error(LocationException('Location Permissions denied'));
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return Future.error(LocationException(
+          'Location permissions are permanently denied, we cannot request permissions.'));
+    }
+
+    return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
   }
 }

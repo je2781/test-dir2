@@ -5,26 +5,22 @@ import 'package:sports_network/data/widget_keys.dart';
 import 'package:sports_network/screens/verify_screen.dart';
 import 'package:sports_network/screens/tabs_screen.dart';
 import 'package:sports_network/widgets/auth_card.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:sports_network/firebase_options.dart';
-import 'package:sports_network/main.dart';
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
+import 'package:firebase_storage_mocks/firebase_storage_mocks.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 
 import './mocks.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    //initializing firebase sdk in flutter app for android/IOS platform
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  runApp(const MyApp());
-
   final mockObserver = MockNavigatorObserver();
+  final mockUser = MockUser();
   Widget _createAuthWidget() {
     return MaterialApp(
       routes: {
         '/': (_) => const Scaffold(
-              body: AuthCard(),
+              body: Material(
+                child: AuthCard(),
+              ),
             ),
         VerifyScreen.routeName: (_) => VerifyScreen(),
         TabsScreen.routeName: (_) => TabsScreen()
@@ -113,7 +109,7 @@ void main() async {
       await tester.enterText(find.byKey(WidgetKey.confirmPTextField), 'zoooo');
       await tester.pump();
       await tester.enterText(
-          find.byKey(WidgetKey.mobileTextField), '+234 703 637 4586');
+          find.byKey(WidgetKey.mobileTextField), '+2347036374586');
       await tester.pump();
       await tester.enterText(
           find.byKey(WidgetKey.interestsTextField), 'Basketball');
