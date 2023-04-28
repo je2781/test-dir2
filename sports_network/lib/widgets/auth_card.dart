@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fl_country_code_picker/fl_country_code_picker.dart';
 import "package:provider/provider.dart";
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/reg_express.dart';
 import '../data/widget_keys.dart';
@@ -16,6 +18,7 @@ import '../picker/user_image_picker.dart';
 import '../data/extensions.dart';
 import '../models/interests.dart';
 import '../provider/country_info.dart';
+import '../models/location_exception.dart';
 
 enum AuthMode { Signup, Login, ForgotPassword, LoginWithMobile }
 
@@ -31,8 +34,10 @@ class AuthCard extends StatefulWidget {
 class _AuthCardState extends State<AuthCard> {
   //creating instance of country picker
   final countryPicker = const FlCountryCodePicker();
+  //defining current country dial code variable
+  String? _currentCountryDialCode;
   //defining country code variable
-  CountryCode? countryCode;
+  CountryCode? _countryCode;
   //connecting key to Form state
   final _formKey = GlobalKey<FormState>();
   AuthMode _authMode = AuthMode.Login;
@@ -66,8 +71,11 @@ class _AuthCardState extends State<AuthCard> {
       try {
         await Provider.of<CountryInfo>(context, listen: false)
             .fetchAndSetCountryData();
-      } on HttpException catch (_) {
+      } on LocationException catch (err) {
         var errMessage = 'failed to fetch country data';
+        if (err != null) {
+          errMessage = err.toString();
+        }
         await _showErrorDialog(errMessage);
       }
     });
@@ -119,7 +127,6 @@ class _AuthCardState extends State<AuthCard> {
       String verificationId, NavigatorState navigator) async {
     await showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (_) => AlertDialog(
         title: Text("Enter SMS Code"),
         content: Column(
@@ -191,9 +198,16 @@ class _AuthCardState extends State<AuthCard> {
       'username': username,
       'image_url': imageUrl
     });
+    //loads and parses shared preferences for app, providing a persistent
+    //storage for user linked mobile number, using device storage
+    final prefs = await SharedPreferences.getInstance();
+    final userData = json.encode({'mobile': mobile});
+    //saving user data to persistent storage
+    await prefs.setString('userData', userData);
   }
 
-  Future<void> _submit(NavigatorState navigator) async {
+  Future<void> _submit(NavigatorState navigator,
+      ScaffoldMessengerState scaffold, ThemeData theme) async {
     //closing the keyboard by removing focus from all text fields
     FocusScope.of(context).unfocus();
     //checking validity of text fields
@@ -202,9 +216,23 @@ class _AuthCardState extends State<AuthCard> {
     }
     //checking if image was picked
     if (_userImageFile == null && _authMode == AuthMode.Signup) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffold.showSnackBar(
         SnackBar(
           content: const Text('please pick an image'),
+          backgroundColor: Theme.of(context).errorColor,
+        ),
+      );
+      return;
+    }
+
+    //checking if country code was selected
+    if (_countryCode == null &&
+        _currentCountryDialCode == null &&
+        (_authMode == AuthMode.Signup ||
+            _authMode == AuthMode.LoginWithMobile)) {
+      scaffold.showSnackBar(
+        SnackBar(
+          content: const Text('please select a country code'),
           backgroundColor: Theme.of(context).errorColor,
         ),
       );
@@ -221,15 +249,24 @@ class _AuthCardState extends State<AuthCard> {
     try {
       if (_authMode == AuthMode.Login) {
         // Log in user with email/password
-        await _auth.signInWithEmailAndPassword(
+        final userCreds = await _auth.signInWithEmailAndPassword(
             email: _authData['email']!, password: _authData['password']!);
+        //loads and parses shared preferences for app, providing a persistent
+        //storage for user linked mobile number, using device storage
+        final prefs = await SharedPreferences.getInstance();
+        final userData = json.encode(
+          {'mobile': userCreds.user!.phoneNumber},
+        );
+        //saving user data to persistent storage
+        await prefs.setString('userData', userData);
+
         navigator.pushReplacement(
           MaterialPageRoute(
             builder: (_) => TabsScreen(),
           ),
         );
       } else if (_authMode == AuthMode.Signup) {
-        // Sign user up with email/password, and store extra values in the store using the firebasefirestore api
+        // Sign user up with email/password, and store extra values in firebasefirestore using api
         await _getAuthSignUp(
             _authData['email']!,
             _authData['password']!,
@@ -243,12 +280,51 @@ class _AuthCardState extends State<AuthCard> {
           ),
         );
       } else {
+        //loads and parses shared preferences for app
+        final pref = await SharedPreferences.getInstance();
+        //check if persistent storage contains string userData
+        if (!pref.containsKey('userData')) {
+          //removing loading indicator
+          setState(() {
+            _isLoading = false;
+          });
+          scaffold.showSnackBar(
+            SnackBar(
+              content: const Text(
+                  'Can\'t signin with your mobile number at the moment, try email/password'),
+              backgroundColor: theme.errorColor,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+        //reading and extracting current user's mobile number from persistent storage
+        final extractedUserData = json.decode(pref.getString('userData')!);
+
+        if (extractedUserData['mobile'] != _authData['mobile']) {
+          //removing loading indicator
+          setState(() {
+            _isLoading = false;
+          });
+          //display UI dialog informing user that entered mobile number is wrong
+          scaffold.showSnackBar(
+            SnackBar(
+              content: const Text(
+                  'mobile number doesn\'t match any registered user'),
+              backgroundColor: theme.errorColor,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          return;
+        }
         //signin using mobile number
         await _auth.verifyPhoneNumber(
             phoneNumber: _authData['mobile'],
             verificationCompleted: (credential) async {
               //signin into account with provided phone auth credential
               await _auth.signInWithCredential(credential);
+
               navigator.pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => TabsScreen(),
@@ -275,7 +351,7 @@ class _AuthCardState extends State<AuthCard> {
       });
 
       //scaffold page UI info dialog, informing on error message
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffold.showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: Theme.of(context).errorColor,
@@ -290,7 +366,7 @@ class _AuthCardState extends State<AuthCard> {
       });
 
       //scaffold page UI info dialog, informing on error message
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffold.showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: Theme.of(context).errorColor,
@@ -309,7 +385,7 @@ class _AuthCardState extends State<AuthCard> {
     if (_authMode == AuthMode.Login || _authMode == AuthMode.LoginWithMobile) {
       setState(() {
         //resetting country code varriable
-        countryCode = null;
+        _countryCode = null;
         _authMode = AuthMode.Signup;
       });
     } else {
@@ -344,7 +420,7 @@ class _AuthCardState extends State<AuthCard> {
     } else {
       setState(() {
         //resetting country code varriable
-        countryCode = null;
+        _countryCode = null;
         _authMode = AuthMode.LoginWithMobile;
       });
     }
@@ -358,12 +434,16 @@ class _AuthCardState extends State<AuthCard> {
   Widget build(BuildContext context) {
     //connecting to country store to be aware of changes in country info state
     final countryStore = Provider.of<CountryInfo>(context);
+    //initializing current country dial code variable
+    _currentCountryDialCode = countryStore.dialCode;
     //connecting to navigator state to be aware of route changes
     final navigator = Navigator.of(context);
     //connecting to the device media
     final deviceSize = MediaQuery.of(context).size;
     //connecting to the page scaffold
     final scaffold = ScaffoldMessenger.of(context);
+    //connecting to the app theme data
+    final theme = Theme.of(context);
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10.0),
@@ -534,15 +614,18 @@ class _AuthCardState extends State<AuthCard> {
                                 final code = await countryPicker.showPicker(
                                     context: context);
                                 setState(() {
-                                  countryCode = code;
+                                  _countryCode = code;
                                 });
                               },
                               child: Row(
                                 children: [
                                   Container(
-                                      child: countryCode?.flagImage() ??
-                                          Image.network(
-                                              countryStore.imageUrl!)),
+                                      child: _countryCode != null
+                                          ? _countryCode!.flagImage()
+                                          : countryStore.imageUrl != null
+                                              ? Image.network(
+                                                  countryStore.imageUrl!)
+                                              : null),
                                   const SizedBox(
                                     width: 5,
                                   ),
@@ -559,8 +642,11 @@ class _AuthCardState extends State<AuthCard> {
                                     child: Row(
                                       children: [
                                         Text(
-                                          countryCode?.dialCode ??
-                                              countryStore.dialCode!,
+                                          _countryCode != null
+                                              ? _countryCode!.dialCode
+                                              : _currentCountryDialCode != null
+                                                  ? _currentCountryDialCode!
+                                                  : '+1',
                                           style: const TextStyle(
                                             color: Colors.white,
                                           ),
@@ -586,15 +672,15 @@ class _AuthCardState extends State<AuthCard> {
                         return 'please provide a mobile number!';
                       }
 
-                      if (value.trim().length < 10) {
+                      if (value.trim().length < 11) {
                         return 'invalid number!';
                       }
 
-                      return null;        
+                      return null;
                     },
                     onSaved: (value) {
                       _authData['mobile'] =
-                          '${countryCode?.dialCode ?? countryStore.dialCode}${value!.trim().substring(1)}';
+                          '${_countryCode?.dialCode ?? _currentCountryDialCode}${value!.trim().substring(1)}';
                     },
                   ),
                 if (_authMode == AuthMode.Signup)
@@ -618,7 +704,8 @@ class _AuthCardState extends State<AuthCard> {
                           onSaved: (value) {
                             _authData['interest'] = value!.trim();
                           },
-                          onFieldSubmitted: (_) => _submit(navigator),
+                          onFieldSubmitted: (_) =>
+                              _submit(navigator, scaffold, theme),
                         ),
                       ),
                       PopupMenuButton<Interests>(
@@ -631,7 +718,7 @@ class _AuthCardState extends State<AuthCard> {
                           );
                         }).toList(),
                         // After selecting the desired option,it will
-                        // change button value to selected value
+                        // change text field value to selected value
                         onSelected: (Interests? newValue) {
                           setState(() {
                             _interestsController.text =
@@ -655,6 +742,8 @@ class _AuthCardState extends State<AuthCard> {
                         key: WidgetKey.elevatedButton,
                         onPressed: _authMode == AuthMode.ForgotPassword
                             ? () async {
+                                //closing the keyboard by removing focus from all text fields
+                                FocusScope.of(context).unfocus();
                                 //set loading indicator
                                 setState(() {
                                   _isLoading = true;
@@ -701,7 +790,7 @@ class _AuthCardState extends State<AuthCard> {
                                   _authMode = AuthMode.Login;
                                 });
                               }
-                            : () => _submit(navigator),
+                            : () => _submit(navigator, scaffold, theme),
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),

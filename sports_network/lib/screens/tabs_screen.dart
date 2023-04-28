@@ -137,7 +137,7 @@ class _TabsScreenState extends State<TabsScreen> {
         await _getAuthVerifyPhone(doc['mobile'], navigator!);
       } on FirebaseAuthException catch (err) {
         var message =
-            'There was an error with linking/unlinking PhoneAuthProvider';
+            'There was an error with linking PhoneAuthProvider';
 
         if (err.message != null) {
           message = err.message!;
@@ -161,16 +161,6 @@ class _TabsScreenState extends State<TabsScreen> {
       {"page": SettingPrivacyScreen(), "title": 'Settings'}
     ];
   }
-
-  // @override
-  // void didChangeDependencies() {
-  //   // TODO: implement didChangeDependencies
-  //   super.didChangeDependencies();
-  //   //unlinking phone auth provider from current user account to allow for phone reverification
-  //   Future.delayed(Duration.zero).then((_) async {
-  //     await _auth.currentUser!.unlink(PhoneAuthProvider.PROVIDER_ID);
-  //   });
-  // }
 
   @override
   void dispose() {
